@@ -1,0 +1,6 @@
+#$ -N irf
+#$ -t 1:75000
+#$ -e Corona/chunk
+#$ -o Corona/chunk
+#$ -l h_vmem=30000000G
+R --vanilla < Corona/Empirics/03_compute_irf_rolling_window.R

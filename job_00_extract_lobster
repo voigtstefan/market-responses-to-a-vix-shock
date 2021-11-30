@@ -1,0 +1,6 @@
+#$ -N lobster_extract
+#$ -t 1:24
+#$ -e Corona/Chunk_x
+#$ -o Corona/Chunk_x
+#$ -l h_vmem=30000000G
+R --vanilla < Corona/Empirics/00_extract_lobster.R

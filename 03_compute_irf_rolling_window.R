@@ -13,29 +13,18 @@ full_sample <- full_sample %>%
   pivot_wider(names_from = ticker, 
               values_from = signed_volume:last_col(), 
               names_sep = ".") %>% 
-  na.omit()
+  drop_na()
 
 # Merge with Variance risk premium data ----
 vix_decomposition <- read_rds("data/pitrading/variance_risk_premium.rds") %>%  
-  select(ts, date,
-         iv = IV,
-         uc = UC, 
-         ra = risk_aversion) %>%
-  fill(everything()) %>%
-  group_by(date = as.Date(ts)) %>% 
-  mutate(uc =  (uc - lag(uc)), 
-         iv =  (iv - lag(iv)),  
-         ra =  (ra - lag(ra)),
-         ts = ts - minutes(5)) %>% # Timing convention in Lobster: 09:35 contains information from 09:30 until 09:35
-  ungroup() %>% 
-  select(-date)
+  select(ts, iv, erv, vrp)
 
 full_sample <- full_sample %>% 
   left_join(vix_decomposition, by = "ts") %>% 
-  fill(iv, uc, ra)
+  fill(iv, erv, vrp)
 
 # Define setup for parallel computing -----
-shocked_variables <- c("iv", "uc", "ra")
+shocked_variables <- c("iv", "erv", "vrp")
 
 n_months <- 12
 response_variables <- ncol(full_sample) - 1
@@ -67,8 +56,8 @@ sample <- full_sample %>%
 if(standardize) sample <- sample %>% mutate(across(-ts, scale_this))
 
 if(shocked_variable == "iv"){
-  sample <- sample %>% select(-uc, -ra)  
-}else if(shocked_variable %in% c("uc", "ra")){
+  sample <- sample %>% select(-erv, -vrp)  
+}else if(shocked_variable %in% c("erv", "vrp")){
   sample <- sample %>% select(-iv)  
 }
 

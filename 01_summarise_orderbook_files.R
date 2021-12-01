@@ -54,7 +54,7 @@ closing_auction <- orderbook %>%
   filter(row_number() == 1) %>%
   .$ts
 
-orderbook <- process_orderbook(orderbook)
+orderbook <- process_orderbook(orderbook) # Process orderbook (code in _tools.R)
 
 # Compute summary statistics
 orderbook_summaries <- orderbook %>%

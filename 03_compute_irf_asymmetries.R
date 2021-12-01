@@ -13,31 +13,20 @@ full_sample <- full_sample %>%
   pivot_wider(names_from = ticker, 
               values_from = signed_volume:last_col(), 
               names_sep = ".") %>% 
-  na.omit()
+  drop_na()
 
 # Merge with Variance risk premium data ----
 vix_decomposition <- read_rds("data/pitrading/variance_risk_premium.rds") %>%  
-  select(ts, date,
-         iv = IV,
-         uc = UC, 
-         ra = risk_aversion) %>%
-  fill(everything()) %>%
-  group_by(date = as.Date(ts)) %>% 
-  mutate(uc = (uc - lag(uc)), 
-         iv = (iv - lag(iv)), 
-         ra = (ra - lag(ra)),
-         ts = ts - minutes(5)) %>% # Timing convention in Lobster: 09:35 contains information from 09:30 until 09:35
-  ungroup() %>% 
-  select(-date)
+  select(ts, iv, erv, vrp)
 
 full_sample <- full_sample %>% 
   left_join(vix_decomposition, by = "ts") %>% 
-  fill(iv, uc, ra)
+  fill(iv, erv, vrp)
 
 full_sample <- full_sample %>% 
   mutate(pos_dvix = if_else(iv > 0, iv, as.numeric(0)), 
          neg_dvix = if_else(iv < 0, -iv, as.numeric(0))) %>% 
-  select(-iv, -uc, -ra)
+  select(-iv, -erv, -vrp)
 
 # Define setup for parallel computing -----
 shocked_variables <- c("pos_dvix", "neg_dvix")

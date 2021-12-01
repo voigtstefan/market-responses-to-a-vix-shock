@@ -19,6 +19,10 @@ Sys.setenv(TZ = "GMT")
 project_tickers <- c("SPY", "HYG", "LQD", "TLT")
 minutes <- c(0, 20, 40, 60)
 number_of_levels <- 50 # lobster order book depth
+start_date <- "2007-07-01"
+end_date <- "2021-04-07"
+
+standard_y_axis_label <- "Amihud                    mUSD                 Basis Points                     mUSD                  Basis Points               mUSD      \n"
 
 transform_ticker_to_names <- function(data) {
   data %>%

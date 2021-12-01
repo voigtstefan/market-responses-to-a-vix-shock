@@ -10,24 +10,24 @@ existing_files <- tibble(
   mutate(date = as.Date(date))
 
 data <- existing_files %>%
-  filter(ticker %in% project_tickers) %>%
+  filter(ticker %in% project_tickers,
+         date >= start_date,
+         date <= end_date) %>%
   pull(files) %>%
   map_dfr(read_rds)
 
 # Remove obsolete data ----
-## Restrict to sample period and only retain periods +- 30 minutes from market open or close
+# Only retain periods +- 30 minutes from market open or close
+
 data <- data %>%
   filter(
-    date >= "2007-07-01",
-    date <= "2021-04-07",
     include_in_sample
   ) %>%
   select(-include_in_sample)
 
-## We remove manually:
-### An extremely low HYG return (<-100%) at 2007-06-27 10:00:00 and >10% spread for almost all morning on the subsequent day.
-### An extremely large SPY buy order (appearing both in bid and in signed volume) in the interval 2008-04-29 13:30:00 and the following two intervals.
-### The Flash Crash period playing out strongest in the interval 2010-05-06 14:40:00 and the following two intervals.
+# We remove manually:
+# An extremely large SPY buy order (appearing both in bid and in signed volume) in the interval 2008-04-29 13:30:00 and the following two intervals.
+# The Flash Crash period playing out strongest in the interval 2010-05-06 14:40:00 and the following two intervals.
 
 data <- data %>%
   filter(ts < ymd_hms("2008-04-29 13:30:00") | ts > ymd_hms("2008-04-29 13:40:00")) %>%
@@ -53,14 +53,12 @@ sample <- data %>%
     d50 = (depth50_bid + depth50_ask) * median_midquote / 1e6,
     d0 = (depth0_bid + depth0_ask) * median_midquote / 1e6,
     signed_volume = signed_volume * median_midquote / 1e6,
-    return = return,
-    trading_volume = trading_volume / 1e6
+    trading_volume = trading_volume / 1e6,
+    amihud = if_else(trading_volume > 0, abs(return) / trading_volume, NA_real_)
   ) %>%
   select(-median_midquote, -contains("bid"), -contains("ask"))
 
-N <- sample %>%
-  count(ticker) %>%
-  nrow() # Number of ticker
+N <- sample %>% count(ticker) %>% nrow() # Number of ticker
 
 # Only retain full sample with all N observations ----
 sample <- sample %>%
@@ -69,7 +67,7 @@ sample <- sample %>%
   filter(n() == N) %>%
   ungroup()
 
-# store for further computation ----
+# Store for further computation ----
 write_rds(
   sample,
   "output/orderbook_sample.rds"
@@ -77,12 +75,8 @@ write_rds(
 
 # Evaluate sample ----
 sample <- read_rds("output/orderbook_sample.rds")
-sample <- sample %>% filter(ticker %in% project_tickers)
 
-sample <- sample %>% 
-  mutate(amihud = if_else(trading_volume == 0, NA_real_, abs(return) / trading_volume))
-
-# Summary plot with annualized boxplots ----
+# Summary plot with annualized Boxplots ----
 p <- sample %>%
   transform_ticker_to_names() %>%
   select(ts,
@@ -115,7 +109,7 @@ p <- sample %>%
     labels = scales::date_format("%y")
   ) +
   labs(x = "",
-       y = "Amihud                    mUSD                 Basis Points                     mUSD                  Basis Points               mUSD      \n") +
+       y = standard_y_axis_label) +
   geom_hline(aes(yintercept = 0), linetype = "dotted") 
 
 ggsave(p,
@@ -170,7 +164,7 @@ tab_total <- sample %>%
   pivot_wider(names_from = year, values_from = Mean)
 
 # VIX summaries (log changes in bp)
-vix_raw <- read_csv("data/pitrading/vix_sample.csv") %>%
+vix_raw <- read_rds("data/pitrading/vix_spx_sample.rds") %>%
   group_by(date = as.Date(ts)) %>%
   mutate(VIX = 10000 * (log(VIX) - lag(log(VIX)))) %>%
   ungroup() %>%

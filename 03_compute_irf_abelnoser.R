@@ -13,35 +13,22 @@ full_sample <- full_sample %>%
   pivot_wider(names_from = ticker, 
               values_from = signed_volume:last_col(), 
               names_sep = ".") %>% 
-  na.omit()
+  drop_na()
 
 # Merge with Variance risk premium data ----
 vix_decomposition <- read_rds("data/pitrading/variance_risk_premium.rds") %>%  
-  select(ts, date,
-         iv = IV,
-         uc = UC, 
-         ra = risk_aversion) %>%
-  fill(everything()) %>%
-  group_by(date = as.Date(ts)) %>% 
-  mutate(uc = (uc - lag(uc)), 
-         iv = (iv - lag(iv)), 
-         ra = (ra - lag(ra)),
-         ts = ts - minutes(5)) %>% # Timing convention in Lobster: 09:35 contains information from 09:30 until 09:35
-  ungroup() %>% 
-  select(-date)
+  select(ts, iv, erv, vrp)
 
 full_sample <- full_sample %>% 
   left_join(vix_decomposition, by = "ts") %>% 
-  fill(iv, uc, ra)
+  fill(iv, erv, vrp)
 
 # Define setup for parallel computing -----
-shocked_variables <- c("iv", "uc", "ra")
-periods <- c("full")
+shocked_variables <- c("iv", "erv", "vrp")
 
 response_variables <- ncol(full_sample) - 1
 
 eval_grid <- expand_grid(standardize = c(TRUE, FALSE), 
-                         period = periods, 
                          shocked_variable = shocked_variables,
                          i = 1:response_variables)
 
@@ -49,30 +36,18 @@ n <- as.integer(Sys.getenv("SGE_TASK_ID"))
 n <- if_else(is.na(n), as.integer(1), as.integer(n))
 
 standardize <- eval_grid$standardize[n]
-period <- eval_grid$period[n]
 shocked_variable <- eval_grid$shocked_variable[n]
 i <- eval_grid$i[n]
 
 # Sample preparation ----
 
-cat(shocked_variable, period, standardize, i, "\n")
+cat(shocked_variable, standardize, i, "\n")
 
-if(period == "full"| period == "between"){
-  start_date <- case_when(period == "full" ~ "2007-06-26",
-                          period == "between" ~ "2009-09-02")
-  end_date <- case_when(period == "full" ~ "2022-01-01",
-                        period == "between" ~ "2020-02-14",
-  )
-  sample <- full_sample %>%
-    filter(ts > start_date,
-           ts < end_date)  
-}
-
-if(standardize) sample <- sample %>% mutate_at(vars(-ts), scale_this)
+if(standardize) sample <- sample %>% mutate(across(c(-ts), scale_this))
 
 if(shocked_variable == "iv"){
-  sample <- sample %>% select(-uc, -ra)  
-}else if(shocked_variable %in% c("uc", "ra")){
+  sample <- sample %>% select(-erv, -vrp)  
+}else if(shocked_variable %in% c("erv", "vrp")){
   sample <- sample %>% select(-iv)  
 }
 

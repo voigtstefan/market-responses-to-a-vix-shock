@@ -33,7 +33,7 @@ shocked_variables <- c("pos_dvix", "neg_dvix")
 periods <- c("full")
 response_variables <- ncol(full_sample) - 1
 
-eval_grid <- expand_grid(standardize = c(TRUE, FALSE), 
+eval_grid <- expand_grid(standardize = c(FALSE), 
                          period = periods, 
                          shocked_variable = shocked_variables,
                          i = 1:response_variables)

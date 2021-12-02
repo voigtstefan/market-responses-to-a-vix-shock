@@ -28,7 +28,7 @@ shocked_variables <- c("iv", "erv", "vrp")
 
 response_variables <- ncol(full_sample) - 1
 
-eval_grid <- expand_grid(standardize = c(TRUE, FALSE), 
+eval_grid <- expand_grid(standardize = c(FALSE), 
                          shocked_variable = shocked_variables,
                          i = 1:response_variables)
 

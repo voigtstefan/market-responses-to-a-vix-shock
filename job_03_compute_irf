@@ -1,6 +1,6 @@
-#$ -N irf
-#$ -t 1:75000
-#$ -e Corona/chunk
-#$ -o Corona/chunk
+#$ -N irf_abel
+#$ -t 1:52
+#$ -e chunk
+#$ -o chunk
 #$ -l h_vmem=30000000G
-R --vanilla < Corona/Empirics/03_compute_irf_rolling_window.R
+R --vanilla < asset_allocation_and_liquidity/03_compute_irf_asymmetries.R

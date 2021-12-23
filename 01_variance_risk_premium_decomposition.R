@@ -73,8 +73,8 @@ data_nested <- data %>%
   nest()
 
 # Run regressions ----
-
 # Parameter estimates
+
 regression_parameters <- data_nested %>%
   mutate(
     lm = map(data, function(.) lm(ftr_realized_variance ~ RV21 + RV4 + tilde_R, data = .)),
@@ -163,43 +163,41 @@ rv_predictions <- data %>%
   )) %>%
   unnest(predicted_rv)
 
-data <- data %>%
+processed_data <- data %>%
   left_join(rv_predictions %>% select(date, time, predicted_rv), by = c("date", "time")) %>%
   mutate(
-    iv = VIX^2 / 120000,
-    erv = predicted_rv,
-    vrp = iv - erv,
+    iv_ts = VIX^2 / 120000,
+    erv_ts = predicted_rv,
+    vrp_ts = iv_ts - erv_ts,
     ts = ts - minutes(5)) %>% # Align with Lobster timing convention: 09:35 contains information from 09:30 until 09:35
   select(-future_date)
 
 # Store the (processed) file with changes instead of levels (as described in Paper)
 
-processed_data  <- data %>%  
+processed_data  <- processed_data %>%  
   group_by(date = as.Date(ts)) %>% 
-  mutate(erv =  erv - lag(erv), 
-         iv =  iv - lag(iv),  
-         vrp =  vrp - lag(vrp)) %>% 
-           ungroup() %>%
-  select(-date)
+  mutate(erv =  erv_ts - lag(erv_ts), 
+         iv =  iv_ts - lag(iv_ts),  
+         vrp =  vrp_ts - lag(vrp_ts)) %>% 
+           ungroup()
 
 processed_data %>% write_rds("data/pitrading/variance_risk_premium.rds")
 
 # Plot VIX and future realized volatility ----
 
-p1 <- data %>%
-  na.omit() %>%
+p1 <- processed_data %>%
+  drop_na() %>%
   group_by(date) %>%
-  select(date, ts, iv, erv, vrp, ftr_realized_variance) %>%
-  summarise_all(last) %>%
-  pivot_longer(iv:last_col(),
+  select(date, ts, iv_ts, erv_ts, vrp_ts) %>%
+  summarise_all(median) %>%
+  pivot_longer(iv_ts:last_col(),
                names_to = " "
   ) %>%
   mutate(
     ` ` = case_when(
-      ` ` == "iv" ~ "IV: Implied Variance (VIX^2 / 12)",
-      ` ` == "ftr_realized_variance" ~ "Realized Future Variance: RV(22)",
-      ` ` == "erv" ~ "ERV: Expected RV(22)",
-      TRUE ~ "vrp: Variance Risk Premium (IV - ERV)"
+      ` ` == "iv_ts" ~ "IV (Implied Variance)",
+      ` ` == "erv_ts" ~ "ERV (Expected RV)",
+      TRUE ~ "VRP (IV - ERV)"
     ),
     value = value * 10000
   ) %>%
@@ -226,85 +224,3 @@ ggsave(p1,
        filename = "output/figures/iv_rv.jpeg",
        width = 14, height = 8
 )
-
-# 
-# data <- read_rds("data/pitrading/variance_risk_premium.rds")
-# 
-# 
-# # Lasso regression ----
-# full_sample <- read_rds("output/orderbook_sample.rds")
-# full_sample <- full_sample %>%
-#   filter(ticker %in% project_tickers) %>%
-#   select(
-#     ts, ticker,
-#     signed_volume, trading_volume, depth, return, spread
-#   ) %>%
-#   pivot_wider(
-#     names_from = ticker,
-#     values_from = signed_volume:last_col(),
-#     names_sep = "."
-#   ) %>%
-#   na.omit()
-# 
-# fit_lasso <- data %>%
-#   mutate(ts = ts - minutes(5)) %>%
-#   left_join(full_sample) %>%
-#   filter(
-#     time >= as_hms("10:00:00"),
-#     time <= as_hms("15:30:00")
-#   ) %>%
-#   na.omit() %>%
-#   filter(date >= "2006-07-01") %>%
-#   group_by(time) %>%
-#   nest() %>%
-#   mutate(
-#     lasso = map(data, function(tmp_data) {
-#       dat <- tmp_data %>%
-#         mutate_at(vars(tilde_R, RV21, RV4, ftr_realized_variance), ~ log(1e-16 + .)) %>%
-#         select(-ts, -date, -future_date) %>%
-#         na.omit()
-#       X <- dat %>%
-#         select(-ftr_realized_variance) %>%
-#         mutate(across(everything(),
-#           .fns = list(squared = ~ .^2)
-#         )) %>%
-#         as.matrix()
-# 
-#       y <- dat %>%
-#         select(ftr_realized_variance) %>%
-#         as.matrix()
-#       fit <- glmnet::glmnet(X,
-#         y,
-#         alpha = 1,
-#         lambda = glmnet::cv.glmnet(X, y)$lambda.1se
-#       )
-#       return(fit)
-#     }),
-#     pseudo_r2 = map_dbl(lasso, function(.) .$dev.ratio),
-#     selected_variables = map(lasso, function(fit) {
-#       as_tibble(coef(fit, "lambda.1se") %>% as.matrix(),
-#         rownames = "term"
-#       ) %>%
-#         transmute(term, selected = `1` != 0)
-#     })
-#   )
-# 
-# fit_lasso %>%
-#   select(time, selected_variables) %>%
-#   unnest(selected_variables) %>%
-#   filter(selected, term != "(Intercept)") %>%
-#   mutate(term = gsub("_squared", "", term)) %>%
-#   group_by(term) %>%
-#   summarise(frac = 100 * n() / (2 * 66)) %>%
-#   arrange(desc(frac)) %>%
-#   separate(term, into = c("variable", "ticker"), sep = "\\.") %>%
-#   transform_ticker_to_names() %>%
-#   head(10) %>%
-#   mutate(variable = str_to_title(variable)) %>%
-#   mutate(ticker = if_else(is.na(ticker), " ", paste0("(", ticker, ")"))) %>%
-#   unite(variable:ticker, col = "Variable", sep = " ") %>%
-#   kable(
-#     booktabs = TRUE,
-#     digits = 2,
-#     escape = FALSE
-#   )

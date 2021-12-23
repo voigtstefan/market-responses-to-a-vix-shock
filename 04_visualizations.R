@@ -48,8 +48,8 @@ irf_data <- dir("output/irf_estimation/", full.names = TRUE) %>%
   map_dfr(read_rds) %>%
   filter(
     response != "iv",
-    response != "ra",
-    response != "uc",
+    response != "erv",
+    response != "vrp",
     lead %in% minutes
   ) %>%
   rename("Variable" = shocked_variable) %>%
@@ -58,11 +58,6 @@ irf_data <- dir("output/irf_estimation/", full.names = TRUE) %>%
   left_join(df_names %>% select(-plain_group), by = c("response" = "group")) %>%
   mutate(
     response = fct_reorder(response, order),
-    Variable = case_when(
-      Variable == "IV" ~ "IV",
-      Variable == "RA" ~ "VRP",
-      Variable == "UC" ~ "ERV"
-    ),
     Variable = ordered(Variable, levels = c("IV", "VRP", "ERV")),
     Period = ordered(period, levels = c("GFC", "Between", "COVID-19", "full")),
     Horizon = as_factor(lead)
@@ -107,7 +102,7 @@ for (filter_standardize in c(TRUE, FALSE)) {
   
   if (filter_standardize) {
     p_tmp <- p_tmp + 
-      labs(caption = "Standardized variable responses") + ylab(" ")
+      labs(caption = "Standardized variable responses") 
     ggsave(p_tmp,
       filename = "output/figures/irf_full_iv_standardized.jpeg",
       width = 14, height = 8
@@ -116,9 +111,9 @@ for (filter_standardize in c(TRUE, FALSE)) {
     p_tmp <- p_tmp +
       labs(
         caption = "Raw variable responses",
-        x = "",
-        y = "              Amihud                          mUSD                     Basis Points                     mUSD                     Basis Points                     mUSD                     \n"
+        y = standard_y_axis_label
       ) 
+
     ggsave(p_tmp,
       filename = "output/figures/irf_full_iv_raw.jpeg",
       width = 14, height = 8
@@ -130,7 +125,6 @@ for (filter_standardize in c(TRUE, FALSE)) {
 iv_decomposition <- irf_data %>%
   filter(
     Period == "full", 
-    fixed_shock == FALSE,
     standardize == FALSE
   ) %>%
   ggplot(
@@ -153,7 +147,7 @@ iv_decomposition <- irf_data %>%
   labs(
     caption = "Raw variable responses",
     x = "",
-    y = "              Amihud                          mUSD                     Basis Points                     mUSD                     Basis Points                     mUSD                     \n"
+    y = standard_y_axis_label
   ) +
   scale_y_continuous(minor_breaks = NULL) +
   facet_wrap(response ~ .,
@@ -197,7 +191,7 @@ ggplot(
       ) +
       labs(
         x = "",
-        y = "              Amihud                          mUSD                     Basis Points                     mUSD                     Basis Points                     mUSD                     \n"
+        y = standard_y_axis_label
       ) +
       scale_y_continuous(minor_breaks = NULL) +
       facet_wrap(response ~ .,
@@ -212,7 +206,7 @@ ggsave(comparison_figures,
        width = 14, height = 8
 )
 
-# Standardized TS IV ----
+# Rolling window time-series IRF ----
 
 data_standardized <- tibble(
   filename = dir("output/irf_estimation_rolling", full.names = TRUE)
@@ -230,7 +224,7 @@ data_standardized %>% write_rds("output/irf_estimation_rolling.rds")
 data_standardized <- read_rds("output/irf_estimation_rolling.rds")
 
 p1 <- data_standardized %>%
-  filter(lead == 0) %>%
+  filter(lead == 0, response != "erv", response != "vrp") %>%
   transform_data() %>%
   left_join(df_names %>% select(-plain_group), by = c("response" = "group")) %>%
   mutate(response = fct_reorder(response, order)) %>%
@@ -239,11 +233,6 @@ p1 <- data_standardized %>%
   rename("Variable" = shocked_variable) %>%
   mutate(
     Variable = as_factor(toupper(Variable)),
-    Variable = case_when(
-      Variable == "IV" ~ "IV",
-      Variable == "RA" ~ "VRP",
-      Variable == "UC" ~ "ERV"
-    ),
     Variable = ordered(Variable, levels = c("IV", "VRP", "ERV"))
   ) %>%
   ggplot(aes(
@@ -279,7 +268,6 @@ ggsave(p1,
        width = 14, height = 8
 )
 
-
 # Asymmetry plots (IV changes) ----
 data_asymmetry <- dir("output/irf_estimation_asymmetry/", full.names = TRUE) %>%
   map_dfr(read_rds) %>%
@@ -287,8 +275,8 @@ data_asymmetry <- dir("output/irf_estimation_asymmetry/", full.names = TRUE) %>%
     standardize == FALSE,
     response != "pos_dvix",
     response != "neg_dvix",
-    response != "ra",
-    response != "uc",
+    response != "vrp",
+    response != "erv",
     lead %in% minutes
   ) %>%
   mutate(Shock = case_when(
@@ -329,7 +317,7 @@ p_tmp <- data_asymmetry %>%
     labs(
       caption = "Shock equal to full-sample standard deviation and raw variable responses",
       x = "",
-      y = "              Amihud                          mUSD                     Basis Points                     mUSD                     Basis Points                     mUSD                     \n"
+      y = standard_y_axis_label
     ) +
     scale_y_continuous(minor_breaks = NULL) +
     facet_wrap(response ~ .,
@@ -339,7 +327,7 @@ p_tmp <- data_asymmetry %>%
     geom_hline(aes(yintercept = 0), linetype = "dotted") +
     scale_fill_manual(values = c("VIX increase" = "red", "VIX decrease" = "blue"))
 
-    ggsave(
+    ggsave(p_tmp,
       filename = "output/figures/irf_asymmetry_iv_raw.jpeg",
       width = 14, height = 8
     )
@@ -358,18 +346,13 @@ data_abel <- tibble(file = dir("output/irf_estimation_abel_noser/",
   select(-file) %>%
   filter(
     standardize == FALSE,
-    !response %in% c("iv", "ra", "uc"),
+    !response %in% c("iv", "erv", "vrp"),
     lead %in% minutes
   ) %>%
   transform_data() %>%
   left_join(df_names %>% select(-plain_group), by = c("response" = "group")) %>%
   mutate(
     response = fct_reorder(response, order),
-    Variable = case_when(
-      Variable == "IV" ~ "IV",
-      Variable == "RA" ~ "VRP",
-      Variable == "UC" ~ "ERV"
-    ),
     Variable = ordered(Variable, levels = c("IV", "VRP", "ERV"))
   )
 
@@ -402,102 +385,7 @@ p_tmp <- data_abel %>%
     ) +
     geom_hline(aes(yintercept = 0), linetype = "dotted")
 
-ggsave(
+ggsave(p_tmp,
       filename = "output/figures/irf_abelnoser_iv_decomposition_raw.jpeg",
       width = 14, height = 8
     )
-
-# # Comparison plots (IV decomposition) across different periods
-# 
-# comparison_figures <- irf_data %>%
-#   filter(
-#     fixed_shock == FALSE,
-#     standardize == FALSE
-#   ) %>%
-#   nest(data = -c(Period, standardize)) %>%
-#   mutate(
-#     plot = map(data, ~ ggplot(
-#       data = .x,
-#       aes(x = Horizon, y = ir_estimate, fill = Variable)
-#     ) +
-#       geom_bar(stat = "identity", position = position_dodge(0.5), alpha = 0.6) +
-#       geom_errorbar(aes(
-#         ymin = ir_lower, ymax = ir_upper,
-#         color = Variable
-#       ),
-#       width = .2,
-#       position = position_dodge(0.5)
-#       ) +
-#       theme_minimal(base_size = 8) +
-#       theme(
-#         legend.position = "bottom",
-#         panel.grid.major = element_blank(),
-#         panel.grid.minor = element_blank()
-#       ) +
-#       labs(
-#         x = "",
-#         y = ""
-#       ) +
-#       scale_y_continuous(minor_breaks = NULL) +
-#       facet_wrap(response ~ .,
-#                  scales = "free_y",
-#                  ncol = length(project_tickers)
-#       ) +
-#       geom_hline(aes(yintercept = 0), linetype = "dotted") +
-#       labs(caption = "Raw variable responses") +
-#       ylab("                 mUSD                                     Basis Points                                    mUSD                                      Basis Points                                   mUSD                \n")),
-#     plot = map2(plot, Period, ~ .x + labs(title = paste0("Responses during the ", .y, " period")))
-#   )
-# 
-# align_scales <- function(tmp_plot, comparison_figures) {
-#   tmp_plot +
-#     geom_blank(data = comparison_figures$data[[3]]) +
-#     geom_blank(
-#       data = comparison_figures$data[[3]],
-#       aes(y = ir_lower)
-#     ) +
-#     geom_blank(
-#       data = comparison_figures$data[[3]],
-#       aes(y = ir_upper)
-#     ) +
-#     geom_blank(data = comparison_figures$data[[2]]) +
-#     geom_blank(
-#       data = comparison_figures$data[[2]],
-#       aes(y = ir_lower)
-#     ) +
-#     geom_blank(
-#       data = comparison_figures$data[[2]],
-#       aes(y = ir_upper)
-#     ) +
-#     geom_blank(data = comparison_figures$data[[1]]) +
-#     geom_blank(
-#       data = comparison_figures$data[[1]],
-#       aes(y = ir_lower)
-#     ) +
-#     geom_blank(
-#       data = comparison_figures$data[[1]],
-#       aes(y = ir_upper)
-#     )
-# }
-# 
-# comparison_figures$plot[[1]] %>%
-#   align_scales(comparison_figures) %>%
-#   ggsave(
-#     filename = "output/figures/irf_iv_decomposition_raw_between.jpeg",
-#     width = 14, height = 8
-#   )
-# 
-# comparison_figures$plot[[2]] %>%
-#   align_scales(comparison_figures) %>%
-#   ggsave(
-#     filename = "output/figures/irf_iv_decomposition_raw_covid.jpeg",
-#     width = 14, height = 8
-#   )
-# 
-# comparison_figures$plot[[4]] %>%
-#   align_scales(comparison_figures) %>%
-#   ggsave(
-#     filename = "output/figures/irf_iv_decomposition_raw_gfc.jpeg",
-#     width = 14, height = 8
-#   )
-# 

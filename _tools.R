@@ -74,6 +74,7 @@ df_names <- tibble(group = c(
   "Amihud Measure (Junk Bonds)",
   "Amihud Measure (Corporate Bonds)",
   "Amihud Measure (Government Bonds)",
+  "Price Impact (S&P 500)",
   "cum. VIX changes")) %>%
   mutate(
     plain_group = str_replace(group, "cum. ", ""),

@@ -34,7 +34,7 @@ eval_grid <- expand_grid(fixed_shock = c(FALSE),
                          period = periods, 
                          shocked_variable = shocked_variables,
                          i = 1:response_variables) %>% 
-  filter(!(standardize == FALSE & period != "full")) # standardize just for full sample
+  filter(!(standardize == TRUE & period != "full")) # standardize just for full sample
 
 n <- as.integer(Sys.getenv("SGE_TASK_ID"))
 n <- if_else(is.na(n), as.integer(1), as.integer(n))

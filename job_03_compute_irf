@@ -1,6 +1,6 @@
-#$ -N irf_abel
-#$ -t 1:52
+#$ -N irf_rolling
+#$ -t 146000:150000
 #$ -e chunk
 #$ -o chunk
 #$ -l h_vmem=30000000G
-R --vanilla < asset_allocation_and_liquidity/03_compute_irf_asymmetries.R
+R --vanilla < asset_allocation_and_liquidity/03_compute_irf_rolling_window.R

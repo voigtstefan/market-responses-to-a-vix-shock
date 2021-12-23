@@ -19,7 +19,7 @@ full_sample <- full_sample %>%
 vix_decomposition <- read_rds("data/pitrading/variance_risk_premium.rds") %>%  
   select(ts, iv, erv, vrp)
 
-full_sample <- full_sample %>% 
+sample <- full_sample %>% 
   left_join(vix_decomposition, by = "ts") %>% 
   fill(iv, erv, vrp)
 
@@ -29,6 +29,7 @@ shocked_variables <- c("iv", "erv", "vrp")
 response_variables <- ncol(full_sample) - 1
 
 eval_grid <- expand_grid(standardize = c(FALSE), 
+                         period = "full",
                          shocked_variable = shocked_variables,
                          i = 1:response_variables)
 
@@ -38,6 +39,7 @@ n <- if_else(is.na(n), as.integer(1), as.integer(n))
 standardize <- eval_grid$standardize[n]
 shocked_variable <- eval_grid$shocked_variable[n]
 i <- eval_grid$i[n]
+period <- eval_grid$period[n]
 
 # Sample preparation ----
 

@@ -182,6 +182,7 @@ processed_data  <- processed_data %>%
            ungroup()
 
 processed_data %>% write_rds("data/pitrading/variance_risk_premium.rds")
+processed_data <- read_rds("data/pitrading/variance_risk_premium.rds")
 
 # Plot VIX and future realized volatility ----
 

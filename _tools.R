@@ -3,7 +3,6 @@ library(lubridate)
 library(hms)
 library(ggplot2)
 library(purrr)
-library(tibble)
 library(dplyr)
 library(tidyr)
 library(stringr)
@@ -14,77 +13,65 @@ library(knitr)
 # Global settings ----
 options(knitr.table.format = "latex")
 Sys.setenv(TZ = "GMT")
+Sys.setenv(LANG = "en")
+Sys.setlocale("LC_TIME", "English")
+theme_set(theme_minimal())
 
 # Project settings and variables ----
-project_tickers <- c("SPY", "HYG", "LQD", "TLT")
+project_tickers <- c("SPY", "TLT")
 minutes <- c(0, 20, 40, 60)
-number_of_levels <- 50 # lobster order book depth
+number_of_levels <- 50
 start_date <- "2007-07-01"
 end_date <- "2021-04-07"
 
 standard_y_axis_label <- "Amihud                    mUSD                 Basis Points                     mUSD                  Basis Points               mUSD      \n"
 
 transform_ticker_to_names <- function(data) {
-  data %>%
-    mutate(ticker = case_when(
-      ticker == "SPY" ~ "S&P 500",
-      ticker == "LQD" ~ "Corporate Bonds",
-      ticker == "TLT" ~ "Government Bonds",
-      ticker == "HYG" ~ "Junk Bonds"
-    ), 
-    ticker = fct_relevel(ticker, c(
-      "S&P 500",
-      "Junk Bonds",
-      "Corporate Bonds",
-      "Government Bonds"
-    ))
+  data |>
+    mutate(
+      ticker = case_when(
+        ticker == "SPY" ~ "S&P 500",
+        ticker == "TLT" ~ "Government Bonds"
+      ),
+      ticker = factor(ticker,
+                      levels = c(
+                        "S&P 500",
+                        "Government Bonds"
+                      ),
+                      ordered = TRUE
+      )
     )
 }
 
 df_names <- tibble(group = c(
   "cum. Initiator Net Volume (S&P 500)",
-  "cum. Initiator Net Volume (Junk Bonds)",
-  "cum. Initiator Net Volume (Corporate Bonds)",
   "cum. Initiator Net Volume (Government Bonds)",
   "cum. Client Net Volume (S&P 500)",
-  "cum. Client Net Volume (Junk Bonds)",
-  "cum. Client Net Volume (Corporate Bonds)",
   "cum. Client Net Volume (Government Bonds)",
   "cum. Returns (S&P 500)",
-  "cum. Returns (Junk Bonds)",
-  "cum. Returns (Corporate Bonds)",
   "cum. Returns (Government Bonds)",
   "Trading Volume (S&P 500)",
-  "Trading Volume (Junk Bonds)",
-  "Trading Volume (Corporate Bonds)",
   "Trading Volume (Government Bonds)",
   "Bid-ask Spread (S&P 500)",
-  "Bid-ask Spread (Junk Bonds)",
-  "Bid-ask Spread (Corporate Bonds)",
   "Bid-ask Spread (Government Bonds)",
   "Depth (S&P 500)",
-  "Depth (Junk Bonds)",
-  "Depth (Corporate Bonds)",
   "Depth (Government Bonds)",
   "Depth Imbalance (S&P 500)",
-  "Depth Imbalance (Junk Bonds)",
-  "Depth Imbalance (Corporate Bonds)",
   "Depth Imbalance (Government Bonds)",
   "Amihud Measure (S&P 500)",
-  "Amihud Measure (Junk Bonds)",
-  "Amihud Measure (Corporate Bonds)",
   "Amihud Measure (Government Bonds)",
   "Price Impact (S&P 500)",
-  "cum. VIX changes")) %>%
+  "cum. VIX changes"
+)) |>
   mutate(
     plain_group = str_replace(group, "cum. ", ""),
     order = 1:n()
   )
 
 transform_data <- function(data) {
-  data %>%
-    separate(response, into = c("variable", "ticker"), sep = "\\.") %>%
-    transform_ticker_to_names() %>%
+  data |>
+    separate(response, into = c("variable", "ticker"), sep = "\\.") |>
+    transform_ticker_to_names() |>
     mutate(
       variable = case_when(
         variable == "return" ~ "cum. Returns",
@@ -104,72 +91,74 @@ transform_data <- function(data) {
     )
 }
 
-# Process LOBSTER data ----
+# Process lobster data ----
 process_orderbook <- function(orderbook) {
   
   # Did a trading halt happen?
-  halt_index <- orderbook %>%
+  halt_index <- orderbook |>
     filter(type == 7 & direction == -1 & m_price == -1 / 10000 | type == 7 & direction == -1 & m_price == 1 / 10000)
   
   while (nrow(halt_index) > 1) {
     # Filter out messages that occurred in between trading halts
     cat("Trading halt detected")
-    orderbook <- orderbook %>%
+    orderbook <- orderbook |>
       filter(ts < halt_index$ts[1] | ts > halt_index$ts[2])
-    halt_index <- halt_index %>% filter(row_number() > 2)
+    halt_index <- halt_index |> filter(row_number() > 2)
   }
   
   # Discard everything before type 6 & ID -1 and everything after type 6 & ID -2
   
-  opening_auction <- orderbook %>%
+  opening_auction <- orderbook |>
     filter(
       type == 6,
       order_id == -1
-    ) %>%
-    .$ts
+    ) |>
+    pull(ts)
   
-  closing_auction <- orderbook %>%
+  closing_auction <- orderbook |>
     filter(
       type == 6,
       order_id == -2
-    ) %>%
-    .$ts
+    ) |>
+    pull(ts)
   
   if (length(opening_auction) != 1) {
-    opening_auction <- orderbook %>%
-      select(ts) %>%
-      head(1) %>%
-      .$ts - seconds(0.1)
+    opening_auction <- orderbook |>
+      select(ts) |>
+      head(1) |>
+      pull(ts) - seconds(0.1)
   }
   if (length(closing_auction) != 1) {
-    closing_auction <- orderbook %>%
-      select(ts) %>%
-      tail(1) %>%
-      .$ts + seconds(0.1)
+    closing_auction <- orderbook |>
+      select(ts) |>
+      tail(1) |>
+      pull(ts) + seconds(0.1)
   }
   
-  orderbook <- orderbook %>% filter(ts > opening_auction & ts < closing_auction)
-  orderbook <- orderbook %>% filter(type != 6 & type != 7)
+  orderbook <- orderbook |> filter(ts > opening_auction & ts < closing_auction)
+  orderbook <- orderbook |> filter(type != 6 & type != 7)
   
   # Replace "empty" slots in orderbook (0 volume) with NA prices
-  orderbook <- orderbook %>%
-    mutate(across(contains("bid_price"), ~replace(., . < 0, NA)),
-           across(contains("ask_price"), ~replace(., . >= 999999, NA))) 
-
+  orderbook <- orderbook |>
+    mutate(
+      across(contains("bid_price"), ~ replace(., . < 0, NA)),
+      across(contains("ask_price"), ~ replace(., . >= 999999, NA))
+    )
+  
   # Remove crossed orderbook observations
-  orderbook <- orderbook %>%
+  orderbook <- orderbook |>
     filter(ask_price_1 > bid_price_1)
   
   # Merge transactions with unique time stamp
-  trades <- orderbook %>%
-    filter(type == 4 | type == 5) %>%
+  trades <- orderbook |>
+    filter(type == 4 | type == 5) |>
     select(ts:direction)
   
   trades <- inner_join(trades,
-                       orderbook %>%
-                         group_by(ts) %>%
-                         filter(row_number() == 1) %>%
-                         ungroup() %>%
+                       orderbook |>
+                         group_by(ts) |>
+                         filter(row_number() == 1) |>
+                         ungroup() |>
                          transmute(ts,
                                    ask_price_1, bid_price_1,
                                    midquote = ask_price_1 / 2 + bid_price_1 / 2,
@@ -178,17 +167,17 @@ process_orderbook <- function(orderbook) {
                        by = "ts"
   )
   
-  trades <- trades %>%
+  trades <- trades |>
     mutate(direction = case_when(
-      type == 5 & m_price < lag_midquote ~ 1, # lobster convention: direction = 1 if executed against a limit buy order 
+      type == 5 & m_price < lag_midquote ~ 1, # lobster convention: direction = 1 if executed against a limit buy order
       type == 5 & m_price > lag_midquote ~ -1,
       type == 4 ~ as.double(direction),
       TRUE ~ as.double(NA)
     ))
   
   # Aggregate transactions with size and volume weighted price
-  trade_aggregated <- trades %>%
-    group_by(ts) %>%
+  trade_aggregated <- trades |>
+    group_by(ts) |>
     summarise(
       type = last(type),
       order_id = NA,
@@ -199,20 +188,20 @@ process_orderbook <- function(orderbook) {
   
   # Merge trades with last observed orderbook snapshot
   trade_aggregated <- inner_join(trade_aggregated,
-                        orderbook %>%
-                          select(ts, ask_price_1:last_col()) %>%
-                          group_by(ts) %>%
-                          filter(row_number() == n()),
-                        by = "ts"
+                                 orderbook |>
+                                   select(ts, ask_price_1:last_col()) |>
+                                   group_by(ts) |>
+                                   filter(row_number() == n()),
+                                 by = "ts"
   )
   
-  orderbook <- orderbook %>%
+  orderbook <- orderbook |>
     filter(
       type != 4,
       type != 5
-    ) %>%
-    bind_rows(trade_aggregated) %>%
-    arrange(ts) %>%
+    ) |>
+    bind_rows(trade_aggregated) |>
+    arrange(ts) |>
     mutate(direction = if_else(type == 4 | type == 5, direction, as.double(NA)))
   
   return(orderbook)
@@ -224,9 +213,9 @@ compute_depth <- function(df,
   
   # Computes depth (in contract) based on orderbook snapshots
   if (side == "bid") {
-    value_bid <- (1 - bp / 10000) * df %>% select("bid_price_1")
-    index_bid <- df %>%
-      select(contains("bid_price")) %>%
+    value_bid <- (1 - bp / 10000) * df |> select("bid_price_1")
+    index_bid <- df |>
+      select(contains("bid_price")) |>
       mutate_all(function(x) {
         if_else(is.na(x),
                 FALSE,
@@ -234,23 +223,23 @@ compute_depth <- function(df,
         )
       })
     
-    sum_vector <- (df %>% select(contains("bid_size")) * index_bid) %>% rowSums(na.rm = TRUE)
+    sum_vector <- (df |> select(contains("bid_size")) * index_bid) |> rowSums(na.rm = TRUE)
   } else {
-    value_ask <- (1 + bp / 10000) * df %>% select("ask_price_1")
-    index_ask <- df %>%
-      select(contains("ask_price")) %>%
+    value_ask <- (1 + bp / 10000) * df |> select("ask_price_1")
+    index_ask <- df |>
+      select(contains("ask_price")) |>
       mutate_all(function(x) {
         if_else(is.na(x),
                 FALSE,
                 x <= value_ask
         )
       })
-    sum_vector <- (df %>% select(contains("ask_size")) * index_ask) %>% rowSums(na.rm = TRUE)
+    sum_vector <- (df |> select(contains("ask_size")) * index_ask) |> rowSums(na.rm = TRUE)
   }
   return(sum_vector)
 }
 
-# Shock size selection ----
+# IRF + shock size selection ----
 
 asymptotic_distribution_of_shock <- function(sample,
                                              shocked_variable = colnames(sample)[2],
@@ -259,7 +248,7 @@ asymptotic_distribution_of_shock <- function(sample,
   # Compute the asymptotic distribution of shock vector d
   n <- ncol(sample) - 1
   
-  var_fit <- vars::VAR(sample %>% select(-ts) %>% as.matrix(), p = p)
+  var_fit <- vars::VAR(sample |> select(-ts) |> as.matrix(), p = p)
   res <- residuals(var_fit) # Regression residuals
   Sigma_u <- cov(res) # Sample variance covariance matrix of VAR(p) residuals
   
@@ -267,10 +256,13 @@ asymptotic_distribution_of_shock <- function(sample,
   P <- D %*% solve(t(D) %*% D) %*% t(D)
   Sigma_se <- 2 * P %*% (Sigma_u %x% Sigma_u)
   
-  sigma_j <- Sigma_u[colnames(Sigma_u) == shocked_variable, colnames(Sigma_u) == shocked_variable]
-
+  sigma_j <- Sigma_u[
+    colnames(Sigma_u) == shocked_variable,
+    colnames(Sigma_u) == shocked_variable
+  ]
+  
   # Shock vector: standard deviation shock
-  d_tmp <- tibble(name = colnames(sample)[-1], value = 0) %>%
+  d_tmp <- tibble(name = colnames(sample)[-1], value = 0) |>
     mutate(value = if_else(name == shocked_variable, sqrt(sigma_j), 0))
   
   P_tmp <- Sigma_u / matrix(rep(
@@ -282,18 +274,20 @@ asymptotic_distribution_of_shock <- function(sample,
   )
   
   # Generalized impulse
-  d <- t(d_tmp %>% pull(value) %*% t(P_tmp))
+  d <- t(d_tmp |> pull(value) %*% t(P_tmp))
   
-  e_j <- tibble(name = colnames(sample)[-1], value = 0) %>%
-    mutate(value = if_else(name == shocked_variable, 1, 0)) %>%
-    pull(value) %>%
+  e_j <- tibble(name = colnames(sample)[-1], value = 0) |>
+    mutate(value = if_else(name == shocked_variable, 1, 0)) |>
+    pull(value) |>
     matrix()
   
-  return(list(d = d,
-              e_j = e_j,
-              Sigma_se = Sigma_se,
-              sigma_j = sigma_j,
-              T = nrow(sample)))
+  return(list(
+    d = d,
+    e_j = e_j,
+    Sigma_se = Sigma_se,
+    sigma_j = sigma_j,
+    T = nrow(sample)
+  ))
 }
 
 compute_irf <- function(sample,
@@ -301,7 +295,6 @@ compute_irf <- function(sample,
                         i = 1, # Response variable
                         leads = 12,
                         p = lags) {
-  
   response_var <- names(sample)[-1][i]
   
   # Initialize vectors of interest
@@ -313,24 +306,33 @@ compute_irf <- function(sample,
   e_i <- (1:(ncol(sample[-1])) == i) * 1
   tmp_beta[[1]] <- e_i
   tmp_c[[1]] <- e_i
-  tmp_Sigma_beta[[1]] <- matrix(0, nrow = ncol(sample) - 1, ncol = ncol(sample) - 1)
-  tmp_Sigma_c[[1]] <- matrix(0, nrow = ncol(sample) - 1, ncol = ncol(sample) - 1)
+  tmp_Sigma_beta[[1]] <- matrix(0,
+                                nrow = ncol(sample) - 1,
+                                ncol = ncol(sample) - 1
+  )
+  tmp_Sigma_c[[1]] <- matrix(0,
+                             nrow = ncol(sample) - 1,
+                             ncol = ncol(sample) - 1
+  )
   
-  # Create model matrix 
+  # Create model matrix
   lag_names <- paste("X_lag",
                      formatC(0:p, width = nchar(p), flag = "0"),
                      sep = "_"
   )
-  lag_functions <- setNames(paste("dplyr::lag(., ", 0:p, ")"), lag_names)
+  lag_functions <- setNames(
+    paste("dplyr::lag(., ", 0:p, ")"),
+    lag_names
+  )
   
-  full_model_matrix <- sample %>%
-    pivot_longer(-ts) %>%
-    group_by(name, date = as.Date(ts)) %>%
-    mutate_at(vars(value), funs_(lag_functions)) %>%
-    ungroup() %>%
-    select(-value) %>%
-    filter(!is.na(ts)) %>%
-    select(-date) %>%
+  full_model_matrix <- sample |>
+    pivot_longer(-ts) |>
+    group_by(name, date = as.Date(ts)) |>
+    mutate_at(vars(value), funs_(lag_functions)) |>
+    ungroup() |>
+    select(-value) |>
+    filter(!is.na(ts)) |>
+    select(-date) |>
     pivot_wider(
       names_from = name,
       values_from = lag_names[1]:last_col(),
@@ -338,28 +340,27 @@ compute_irf <- function(sample,
     )
   
   for (h in 1:leads) {
-    
-    regression_matrix <- full_model_matrix %>%
-      select(ts, contains("lag_")) %>%
-      group_by(date = as.Date(ts)) %>%
+    regression_matrix <- full_model_matrix |>
+      select(ts, contains("lag_")) |>
+      group_by(date = as.Date(ts)) |>
       mutate(across(contains(paste0("X_lag_0.", response_var)),
                     .fns = list(y = ~ lead(., h)),
                     .names = "{fn}"
-      )) %>%
-      ungroup() %>%
+      )) |>
+      ungroup() |>
       select(-ts, -date)
     
-    y <- regression_matrix %>% .$y
-    X <- regression_matrix %>%
-      select(-y) %>%
+    y <- regression_matrix |> pull(y)
+    X <- regression_matrix |>
+      select(-y) |>
       as.matrix()
     
     lm_fit <- lm(y ~ X)
-    B <- lm_fit %>% broom::tidy()
-    B <- B %>%
-      filter(grepl("XX_lag_0", term)) %>%
-      mutate(term = str_replace(term, "XX_lag_0.", "")) %>%
-      select(estimate) %>%
+    B <- lm_fit |> broom::tidy()
+    B <- B |>
+      filter(grepl("XX_lag_0", term)) |>
+      mutate(term = str_replace(term, "XX_lag_0.", "")) |>
+      select(estimate) |>
       as.matrix()
     
     se_vals <- sandwich::vcovHC(lm_fit, type = "HC0")
@@ -375,38 +376,40 @@ compute_irf <- function(sample,
     tmp_Sigma_beta[[h + 1]] <- se_vals
     tmp_Sigma_c[[h + 1]] <- tmp_Sigma_c[[h]] + se_vals
     
-    cat(h," ")
+    cat(h, " ")
   }
   
-  irf <- tibble(lead = 5 * (0:leads)) %>% 
-    mutate(response = response_var,
-           beta = tmp_beta, 
-           c = tmp_c,
-           Sigma_beta = tmp_Sigma_beta, 
-           Sigma_c = tmp_Sigma_c,
-           ir = map_dbl(beta, ~t(.) %*% as.vector(asymptotic_d$d)),
-           cir = map_dbl(c, ~t(.) %*% as.vector(asymptotic_d$d)),
-           ir_se = pmap_dbl(list(beta, Sigma_beta, ir), function(beta, Sigma_beta, irf){
-             V <- t(asymptotic_d$e_j) %x% t(beta) - irf/(2 * sqrt(asymptotic_d$sigma_j)) * (t(asymptotic_d$e_j) %x% t(asymptotic_d$e_j))
-             val <- t(as.vector(asymptotic_d$d)) %*% Sigma_beta %*% as.vector(asymptotic_d$d) + 1/(asymptotic_d$sigma_j) * V %*% asymptotic_d$Sigma_se %*% t(V)
-             return(sqrt(val / (asymptotic_d$T)))
-           }),
-           cir_se = pmap_dbl(list(c, Sigma_c, cir), function(beta, Sigma_beta, irf){
-             V <- t(asymptotic_d$e_j) %x% t(beta) - irf/(2 * sqrt(asymptotic_d$sigma_j)) * (t(asymptotic_d$e_j) %x% t(asymptotic_d$e_j))
-             val <- t(as.vector(asymptotic_d$d)) %*% Sigma_beta %*% as.vector(asymptotic_d$d) + 1/(asymptotic_d$sigma_j) * V %*% asymptotic_d$Sigma_se %*% t(V)
-             return(sqrt(val / (asymptotic_d$T)))
-           }),
-           lower = ir - 1.96 * ir_se,
-           upper = ir + 1.96 * ir_se,
-           cir_lower = cir - 1.96 * cir_se,
-           cir_upper = cir + 1.96 * cir_se) %>% 
+  irf <- tibble(lead = 5 * (0:leads)) |>
+    mutate(
+      response = response_var,
+      beta = tmp_beta,
+      c = tmp_c,
+      Sigma_beta = tmp_Sigma_beta,
+      Sigma_c = tmp_Sigma_c,
+      ir = map_dbl(beta, ~ t(.) %*% as.vector(asymptotic_d$d)),
+      cir = map_dbl(c, ~ t(.) %*% as.vector(asymptotic_d$d)),
+      ir_se = pmap_dbl(list(beta, Sigma_beta, ir), function(beta, Sigma_beta, irf) {
+        V <- t(asymptotic_d$e_j) %x% t(beta) - irf / (2 * sqrt(asymptotic_d$sigma_j)) * (t(asymptotic_d$e_j) %x% t(asymptotic_d$e_j))
+        val <- t(as.vector(asymptotic_d$d)) %*% Sigma_beta %*% as.vector(asymptotic_d$d) + 1 / (asymptotic_d$sigma_j) * V %*% asymptotic_d$Sigma_se %*% t(V)
+        return(sqrt(val / (asymptotic_d$T)))
+      }),
+      cir_se = pmap_dbl(list(c, Sigma_c, cir), function(beta, Sigma_beta, irf) {
+        V <- t(asymptotic_d$e_j) %x% t(beta) - irf / (2 * sqrt(asymptotic_d$sigma_j)) * (t(asymptotic_d$e_j) %x% t(asymptotic_d$e_j))
+        val <- t(as.vector(asymptotic_d$d)) %*% Sigma_beta %*% as.vector(asymptotic_d$d) + 1 / (asymptotic_d$sigma_j) * V %*% asymptotic_d$Sigma_se %*% t(V)
+        return(sqrt(val / (asymptotic_d$T)))
+      }),
+      lower = ir - 1.96 * ir_se,
+      upper = ir + 1.96 * ir_se,
+      cir_lower = cir - 1.96 * cir_se,
+      cir_upper = cir + 1.96 * cir_se
+    ) |>
     select(-beta, -c, -Sigma_beta, -Sigma_c)
   
   return(irf)
 }
 
 # Research project helper functions -----
-scale_this <- function(x) {
+scale_variables <- function(x) {
   (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
 }
 

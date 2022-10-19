@@ -1,6 +1,6 @@
 #$ -N sum_lobster
-#$ -t 1:1
-#$ -e Corona/t_chunk
-#$ -o Corona/t_chunk
+#$ -t 1:125
+#$ -e asset_allocation_and_liquidity/t_chunk
+#$ -o asset_allocation_and_liquidity/t_chunk
 #$ -l h_vmem=200000000000000G
-R --vanilla < Corona/Empirics/01_summarise_orderbook_files.R
+R --vanilla < asset_allocation_and_liquidity/01_summarise_orderbook_files.R

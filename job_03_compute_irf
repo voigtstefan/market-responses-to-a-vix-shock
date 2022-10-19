@@ -1,6 +1,6 @@
-#$ -N irf_rolling
-#$ -t 222500:225000
-#$ -e chunk
-#$ -o chunk
+#$ -N irf
+#$ -t 1:180
+#$ -e asset_allocation_and_liquidity/t_chunk
+#$ -o asset_allocation_and_liquidity/t_chunk
 #$ -l h_vmem=30000000G
-R --vanilla < asset_allocation_and_liquidity/03_compute_irf_rolling_window.R
+R --vanilla < asset_allocation_and_liquidity/03_compute_irf_abelnoser.R

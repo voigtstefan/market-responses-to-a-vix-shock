@@ -93,7 +93,7 @@ regression_parameters <- data_nested |>
 
 full_regression_paramaters <- data |>
   mutate(across(c(tilde_R:ftr_realized_variance), ~ log(1e-16 + .))) |>
-  lm(ftr_realized_variance ~ RV21 + RV4 + tilde_R, data = .) |>
+  lm(ftr_realized_variance ~ RV21 + RV4 + tilde_R, data = _) |>
   broom::tidy() |>
   select(term, estimate_full = estimate)
 
@@ -185,7 +185,8 @@ rv_predictions <- data |>
   unnest(predicted_rv)
 
 processed_data <- data |>
-  left_join(rv_predictions |> select(date, time, predicted_rv), by = c("date", "time")) |>
+  left_join(rv_predictions |> select(date, time, predicted_rv), 
+            by = c("date", "time")) |>
   mutate(
     iv_ts = VIX^2 / 120000,
     erv_ts = predicted_rv,

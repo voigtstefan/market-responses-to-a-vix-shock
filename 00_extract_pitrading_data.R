@@ -5,8 +5,12 @@ source("_tools.R")
 spx_data <- read_csv("data/pitrading/SPX.txt")
 spx_data <- spx_data |>
   transmute(
-    Time = if_else(nchar(Time) < 4, paste0("0", Time), as.character(Time)),
-    ts = as.POSIXct(paste(Date, Time), tz = "GMT", format = "%m/%d/%Y %H%M"),
+    Time = if_else(nchar(Time) < 4, 
+                   paste0("0", Time), 
+                   as.character(Time)),
+    ts = as.POSIXct(paste(Date, Time), 
+                    tz = "GMT", 
+                    format = "%m/%d/%Y %H%M"),
     close = as.numeric(Close)
   ) |>
   group_by(date = as.Date(ts)) |>
@@ -24,8 +28,12 @@ spx_data <- spx_data |>
 vix_data <- read_csv("data/pitrading/VIX.txt")
 vix_data <- vix_data |>
   transmute(
-    Time = if_else(nchar(Time) < 4, paste0("0", Time), as.character(Time)),
-    ts = as.POSIXct(paste(Date, Time), tz = "GMT", format = "%m/%d/%Y %H%M"),
+    Time = if_else(nchar(Time) < 4, 
+                   paste0("0", Time), 
+                   as.character(Time)),
+    ts = as.POSIXct(paste(Date, Time), 
+                    tz = "GMT", 
+                    format = "%m/%d/%Y %H%M"),
     close = as.numeric(Close)
   ) |>
   group_by(date = as.Date(ts)) |>

@@ -60,7 +60,6 @@ df_names <- tibble(group = c(
   "Depth Imbalance (Government Bonds)",
   "Amihud Measure (S&P 500)",
   "Amihud Measure (Government Bonds)",
-  "Price Impact (S&P 500)",
   "cum. VIX changes"
 )) |>
   mutate(
@@ -70,7 +69,9 @@ df_names <- tibble(group = c(
 
 transform_data <- function(data) {
   data |>
-    separate(response, into = c("variable", "ticker"), sep = "\\.") |>
+    separate(response, 
+             into = c("variable", "ticker"), 
+             sep = "\\.") |>
     transform_ticker_to_names() |>
     mutate(
       variable = case_when(
@@ -160,7 +161,8 @@ process_orderbook <- function(orderbook) {
                          filter(row_number() == 1) |>
                          ungroup() |>
                          transmute(ts,
-                                   ask_price_1, bid_price_1,
+                                   ask_price_1, 
+                                   bid_price_1,
                                    midquote = ask_price_1 / 2 + bid_price_1 / 2,
                                    lag_midquote = lag(midquote)
                          ),
@@ -189,7 +191,8 @@ process_orderbook <- function(orderbook) {
   # Merge trades with last observed orderbook snapshot
   trade_aggregated <- inner_join(trade_aggregated,
                                  orderbook |>
-                                   select(ts, ask_price_1:last_col()) |>
+                                   select(ts, 
+                                          ask_price_1:last_col()) |>
                                    group_by(ts) |>
                                    filter(row_number() == n()),
                                  by = "ts"
@@ -202,7 +205,9 @@ process_orderbook <- function(orderbook) {
     ) |>
     bind_rows(trade_aggregated) |>
     arrange(ts) |>
-    mutate(direction = if_else(type == 4 | type == 5, direction, as.double(NA)))
+    mutate(direction = if_else(type == 4 | type == 5, 
+                               direction, 
+                               as.double(NA)))
   
   return(orderbook)
 }
@@ -248,7 +253,11 @@ asymptotic_distribution_of_shock <- function(sample,
   # Compute the asymptotic distribution of shock vector d
   n <- ncol(sample) - 1
   
-  var_fit <- vars::VAR(sample |> select(-ts) |> as.matrix(), p = p)
+  var_fit <- vars::VAR(sample |> 
+                         select(-ts) |> 
+                         as.matrix(), 
+                       p = p)
+
   res <- residuals(var_fit) # Regression residuals
   Sigma_u <- cov(res) # Sample variance covariance matrix of VAR(p) residuals
   
@@ -262,8 +271,11 @@ asymptotic_distribution_of_shock <- function(sample,
   ]
   
   # Shock vector: standard deviation shock
-  d_tmp <- tibble(name = colnames(sample)[-1], value = 0) |>
-    mutate(value = if_else(name == shocked_variable, sqrt(sigma_j), 0))
+  d_tmp <- tibble(name = colnames(sample)[-1], 
+                  value = 0) |>
+    mutate(value = if_else(name == shocked_variable, 
+                           sqrt(sigma_j), 
+                           0))
   
   P_tmp <- Sigma_u / matrix(rep(
     diag(Sigma_u),
@@ -317,7 +329,9 @@ compute_irf <- function(sample,
   
   # Create model matrix
   lag_names <- paste("X_lag",
-                     formatC(0:p, width = nchar(p), flag = "0"),
+                     formatC(0:p, 
+                             width = nchar(p), 
+                             flag = "0"),
                      sep = "_"
   )
   lag_functions <- setNames(
@@ -327,8 +341,10 @@ compute_irf <- function(sample,
   
   full_model_matrix <- sample |>
     pivot_longer(-ts) |>
-    group_by(name, date = as.Date(ts)) |>
-    mutate_at(vars(value), funs_(lag_functions)) |>
+    group_by(name, 
+             date = as.Date(ts)) |>
+    mutate_at(vars(value), 
+              funs_(lag_functions)) |>
     ungroup() |>
     select(-value) |>
     filter(!is.na(ts)) |>
@@ -369,7 +385,7 @@ compute_irf <- function(sample,
       grepl("XX_lag_0", rownames(se_vals))
     ]
     
-    # We store: beta, and se_vals
+    # store beta, and se_vals
     tmp_beta[[h + 1]] <- B
     tmp_c[[h + 1]] <- tmp_c[[h]] + B
     
@@ -388,12 +404,14 @@ compute_irf <- function(sample,
       Sigma_c = tmp_Sigma_c,
       ir = map_dbl(beta, ~ t(.) %*% as.vector(asymptotic_d$d)),
       cir = map_dbl(c, ~ t(.) %*% as.vector(asymptotic_d$d)),
-      ir_se = pmap_dbl(list(beta, Sigma_beta, ir), function(beta, Sigma_beta, irf) {
+      ir_se = pmap_dbl(list(beta, Sigma_beta, ir), 
+                       function(beta, Sigma_beta, irf) {
         V <- t(asymptotic_d$e_j) %x% t(beta) - irf / (2 * sqrt(asymptotic_d$sigma_j)) * (t(asymptotic_d$e_j) %x% t(asymptotic_d$e_j))
         val <- t(as.vector(asymptotic_d$d)) %*% Sigma_beta %*% as.vector(asymptotic_d$d) + 1 / (asymptotic_d$sigma_j) * V %*% asymptotic_d$Sigma_se %*% t(V)
         return(sqrt(val / (asymptotic_d$T)))
       }),
-      cir_se = pmap_dbl(list(c, Sigma_c, cir), function(beta, Sigma_beta, irf) {
+      cir_se = pmap_dbl(list(c, Sigma_c, cir), 
+                        function(beta, Sigma_beta, irf) {
         V <- t(asymptotic_d$e_j) %x% t(beta) - irf / (2 * sqrt(asymptotic_d$sigma_j)) * (t(asymptotic_d$e_j) %x% t(asymptotic_d$e_j))
         val <- t(as.vector(asymptotic_d$d)) %*% Sigma_beta %*% as.vector(asymptotic_d$d) + 1 / (asymptotic_d$sigma_j) * V %*% asymptotic_d$Sigma_se %*% t(V)
         return(sqrt(val / (asymptotic_d$T)))

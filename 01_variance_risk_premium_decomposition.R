@@ -41,7 +41,7 @@ change_date_forward <- function(dat, lead = 22) {
     mutate(
       lead_date = if_else(is.na(lead_date), date + years(100), lead_date),
       lead_date = as.POSIXct(paste(lead_date, "16:00"), tz = "GMT")
-    ) |> # alternative: as_hms(dat)
+    ) |>
     pull(lead_date)
 }
 
@@ -60,7 +60,7 @@ data <- data |>
       .complete = TRUE
     ) - squared_return, # subtract squared_return because slider includes the current time stamp
     future_date = change_date_forward(ts)
-  ) # Indicates information set required to observe ftr_realized_variance
+  ) # Indicates required information to observe ftr_realized_variance
 
 # Compute ERV (predicted realized variance) ----
 
@@ -73,9 +73,11 @@ data_nested <- data |>
   mutate(
     static_RV4 = RV4 - tilde_R,
     static_RV21 = RV21 - tilde_R
-  ) |> # Exclude any intraday data)
+  ) |> # Exclude any intraday data
   mutate(across(
-    c(tilde_R:ftr_realized_variance, static_RV4, static_RV21),
+    c(tilde_R:ftr_realized_variance, 
+      static_RV4, 
+      static_RV21),
     ~ log(1e-16 + .)
   )) |>
   nest()
@@ -154,6 +156,7 @@ p3 <- (p1 + theme(
   strip.text = element_text(size = 14),
   legend.text = element_text(size = 14)
 ))
+
 ggsave(p3,
   filename = "output/figures/regression_coefficients_erv.jpeg",
   width = 14, height = 8

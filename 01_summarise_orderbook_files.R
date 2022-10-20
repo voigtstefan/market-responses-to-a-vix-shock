@@ -44,7 +44,7 @@ filename <- missing_files |>
   filter(row_number() == n) |>
   pull(files)
 
-# Read in Messages and process orderbook
+# Read in messages and process orderbook
 
 orderbook <- read_rds(filename)
 opening_auction <- orderbook |>
@@ -56,7 +56,7 @@ closing_auction <- orderbook |>
   filter(row_number() == 1) |>
   pull(ts)
 
-orderbook <- process_orderbook(orderbook) # Process orderbook (code in _tools.R)
+orderbook <- process_orderbook(orderbook) # (processing code in _tools.R)
 
 # Compute summary statistics
 orderbook_summaries <- orderbook |>

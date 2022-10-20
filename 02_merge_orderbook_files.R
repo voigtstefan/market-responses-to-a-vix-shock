@@ -27,7 +27,7 @@ data <- data |>
 
 # We remove manually:
 # An extremely large SPY buy order (appearing both in bid and in signed volume) in the interval 2008-04-29 13:30:00 and the following two intervals.
-# The Flash Crash period playing out strongest in the interval 2010-05-06 14:40:00 and the following two intervals.
+# The Flash Crash period playing out strongest in the interval 2010-05-06 14:40:00 and the following ten minutes
 
 data <- data |>
   filter(ts < ymd_hms("2008-04-29 13:30:00") | ts > ymd_hms("2008-04-29 13:40:00")) |>
@@ -111,7 +111,8 @@ p <- sample |>
   ) +
   theme(
     legend.position = "bottom",
-    panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank()
   ) +
   scale_x_date(
     expand = c(0, 0),

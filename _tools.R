@@ -9,13 +9,36 @@ library(stringr)
 library(readr)
 library(forcats)
 library(knitr)
+library(patchwork)
 
 # Global settings ----
 options(knitr.table.format = "latex")
-Sys.setenv(TZ = "GMT")
-Sys.setenv(LANG = "en")
-Sys.setlocale("LC_TIME", "English")
-theme_set(theme_minimal())
+Sys.setenv(TZ = "GMT",
+           LANG = "en")
+Sys.setlocale("LC_TIME", 
+              "English")
+
+# GGplot2 default theme 
+
+theme_set(theme_minimal(base_size = 8) + 
+            theme(axis.text.x = element_text(size = 15),
+                  axis.text.y = element_text(size = 12),
+                  axis.title = element_text(size = 20),
+                  strip.text = element_text(size = 14),
+                  legend.text = element_text(size = 12),
+                  panel.grid.major = element_blank(),
+                  panel.grid.minor = element_blank(),
+                  legend.position = "bottom",
+                  panel.grid.major.y = element_line(size = .1, color = "gray"))
+            ) 
+
+project_purple <- rgb(68,0,83, max = 255)
+project_aquamarine <- rgb(42,153,147, max = 255)
+project_yellow <- rgb(253, 230, 36, max = 255)
+
+project_color_manual <- scale_color_manual(values = c("VRP" = project_purple, 
+                              "ERV" = project_aquamarine, 
+                              "IV" = project_yellow))
 
 # Project settings and variables ----
 project_tickers <- c("SPY", "TLT")
@@ -24,7 +47,7 @@ number_of_levels <- 50
 start_date <- "2007-07-01"
 end_date <- "2021-04-07"
 
-standard_y_axis_label <- "Amihud                    mUSD                 Basis Points                     mUSD                  Basis Points               mUSD      \n"
+standard_y_axis_label <- "ILLIQ        mUSD      bp       mUSD        bp        mUSD\n"
 
 transform_ticker_to_names <- function(data) {
   data |>
@@ -56,8 +79,6 @@ df_names <- tibble(group = c(
   "Bid-ask Spread (Government Bonds)",
   "Depth (S&P 500)",
   "Depth (Government Bonds)",
-  "Depth Imbalance (S&P 500)",
-  "Depth Imbalance (Government Bonds)",
   "Amihud Measure (S&P 500)",
   "Amihud Measure (Government Bonds)",
   "cum. VIX changes"
@@ -86,9 +107,9 @@ transform_data <- function(data) {
         variable == "amihud" ~ "Amihud Measure"
       ),
       response = paste0(variable, " (", ticker, ")"),
-      ir_estimate = if_else(grepl("Amihud|Trading|Spread|Depth|Imbalance", variable), ir, cir),
-      ir_lower = if_else(grepl("Amihud|Trading|Spread|Depth|Imbalance", variable), lower, cir_lower),
-      ir_upper = if_else(grepl("Amihud|Trading|Spread|Depth|Imbalance", variable), upper, cir_upper)
+      ir_estimate = if_else(grepl("Amihud|Trading|Spread|Depth", variable), ir, cir),
+      ir_lower = if_else(grepl("Amihud|Trading|Spread|Depth", variable), lower, cir_lower),
+      ir_upper = if_else(grepl("Amihud|Trading|Spread|Depth", variable), upper, cir_upper)
     )
 }
 

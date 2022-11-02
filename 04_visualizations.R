@@ -1,10 +1,13 @@
 setwd("asset_allocation_and_liquidity")
 source("_tools.R")
 
-signature_plot <- function(p, standard_y_axis_label = "") {
-  p + geom_bar(stat = "identity", position = position_dodge(0.5), alpha = 1) +
+signature_plot <- function(p, y_axis_label = standard_y_axis_label) {
+  p + geom_bar(stat = "identity", 
+               position = position_dodge(0.5), 
+               alpha = 1) +
     geom_errorbar(aes(
-      ymin = ir_lower, ymax = ir_upper,
+      ymin = ir_lower, 
+      ymax = ir_upper,
       color = Variable
     ),
     width = .2,
@@ -15,20 +18,14 @@ signature_plot <- function(p, standard_y_axis_label = "") {
       scales = "free_y",
       ncol = length(project_tickers)
     ) +
-    theme_minimal(base_size = 8) +
-    theme(
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      legend.position = "bottom",
-      panel.grid.major.y = element_line(size = .1, color = "gray")
-    ) +
     labs(
       x = "",
-      y = standard_y_axis_label,
+      y = y_axis_label,
       color = NULL,
       fill = NULL,
     )
 }
+
 # Prepare main IRF data ----
 irf_data <- dir("output/irf_estimation/", full.names = TRUE) |>
   map_dfr(read_rds) |>
@@ -51,33 +48,11 @@ irf_data <- dir("output/irf_estimation/", full.names = TRUE) |>
   ) |>
   mutate(
     response = fct_reorder(response, order),
-    Variable = ordered(Variable, levels = c("IV", "VRP", "ERV")),
+    Variable = ordered(Variable, levels = c("VRP", "ERV", "IV")),
     Period = ordered(period, levels = c("GFC", "Between", "COVID-19", "full")),
     Horizon = as_factor(lead)
   ) |>
   select(ticker, Variable:last_col())
-
-# Full sample plots (IV) -----
-
-p_tmp <- irf_data |>
-  filter(
-    Period == "full",
-    fixed_shock == FALSE,
-    Variable == "IV"
-  ) |>
-  ggplot(aes(x = Horizon, y = ir_estimate, fill = Variable)) |>
-  signature_plot(standard_y_axis_label = "ILLIQ        mUSD      bp       mUSD        bp        mUSD\n")
-
-ggsave(p_tmp + theme(
-  axis.text.x = element_text(size = 15),
-  axis.text.y = element_text(size = 12),
-  axis.title = element_text(size = 20),
-  strip.text = element_text(size = 14),
-  legend.text = element_text(size = 12)
-),
-filename = "output/figures/irf_full_iv_raw.jpeg",
-width = 14, height = 8
-)
 
 # Comparison plots (IV decomposition) -----
 iv_decomposition <- irf_data |>
@@ -88,15 +63,13 @@ iv_decomposition <- irf_data |>
   ggplot(
     aes(x = Horizon, y = ir_estimate, fill = Variable)
   ) |>
-  signature_plot(standard_y_axis_label = "ILLIQ        mUSD      bp       mUSD        bp        mUSD\n")
+  signature_plot() +
+  project_color_manual +
+  scale_fill_manual(values = c("VRP" = project_purple, 
+                               "ERV" = project_aquamarine, 
+                               "IV" = project_yellow))
 
-ggsave(iv_decomposition + theme(
-  axis.text.x = element_text(size = 15),
-  axis.text.y = element_text(size = 12),
-  axis.title = element_text(size = 20),
-  strip.text = element_text(size = 14),
-  legend.text = element_text(size = 12)
-),
+ggsave(iv_decomposition,
 filename = "output/figures/irf_iv_decomposition_raw_full.jpeg",
 width = 14, height = 8
 )
@@ -117,15 +90,14 @@ comparison_figures <- irf_data |>
       fill = Variable
     )
   ) |>
-  signature_plot(standard_y_axis_label = "ILLIQ        mUSD      bp       mUSD        bp        mUSD\n")
+  signature_plot() +
+  project_color_manual +
+  scale_fill_manual(values = c("VRP" = project_purple, 
+                               "ERV" = project_aquamarine, 
+                               "IV" = project_yellow))
 
-ggsave(comparison_figures + theme(
-  axis.text.x = element_text(size = 15),
-  axis.text.y = element_text(size = 12),
-  axis.title = element_text(size = 20),
-  strip.text = element_text(size = 14),
-  legend.text = element_text(size = 12)
-),
+
+ggsave(comparison_figures,
 filename = "output/figures/irf_iv_decomposition_raw_periods.jpeg",
 width = 14, height = 8
 )
@@ -159,21 +131,20 @@ data_abel <- tibble(file = dir("output/irf_estimation_abel_noser/",
   ) |>
   mutate(
     response = fct_reorder(response, order),
-    Variable = ordered(Variable, levels = c("IV", "VRP", "ERV"))
+    Variable = ordered(Variable, levels = c("VRP", "ERV", "IV"))
   )
 
 p_tmp <- data_abel |>
   mutate(Horizon = as_factor(lead)) |>
   ggplot(aes(x = Horizon, y = ir_estimate, fill = Variable, order = Variable)) |>
-  signature_plot(standard_y_axis_label = "ILLIQ    mUSD     bp      mUSD      bp     mUSD   mUSD\n")
+  signature_plot(y_axis_label = "ILLIQ    mUSD     bp      mUSD      bp     mUSD   mUSD\n") +
+  project_color_manual +
+  scale_fill_manual(values = c("VRP" = project_purple, 
+                               "ERV" = project_aquamarine, 
+                               "IV" = project_yellow))
 
-ggsave(p_tmp + theme(
-  axis.text.x = element_text(size = 15),
-  axis.text.y = element_text(size = 12),
-  axis.title = element_text(size = 19),
-  strip.text = element_text(size = 14),
-  legend.text = element_text(size = 12)
-),
+
+ggsave(p_tmp,
 filename = "output/figures/irf_abelnoser_iv_decomposition_raw.jpeg",
 width = 14, height = 8
 )

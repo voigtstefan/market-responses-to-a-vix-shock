@@ -1,6 +1,5 @@
 setwd("asset_allocation_and_liquidity")
 source("_tools.R")
-library(patchwork)
 
 # Read in SPX and VIX files ----
 data <- read_rds("data/pitrading/vix_spx_sample.rds")
@@ -212,9 +211,9 @@ processed_data <- processed_data |>
   ungroup()
 
 processed_data |> write_rds("data/pitrading/variance_risk_premium.rds")
-processed_data <- read_rds("data/pitrading/variance_risk_premium.rds")
 
 # Plot VIX and future realized volatility ----
+processed_data <- read_rds("data/pitrading/variance_risk_premium.rds")
 
 p1 <- processed_data |>
   drop_na() |>
@@ -222,23 +221,19 @@ p1 <- processed_data |>
   select(date, ts, iv_ts, erv_ts, vrp_ts) |>
   summarise_all(median) |>
   pivot_longer(iv_ts:last_col(),
-    names_to = " "
+               names_to = "Variable"
   ) |>
   mutate(
-    ` ` = case_when(
-      ` ` == "iv_ts" ~ "IV (Implied Variance)",
-      ` ` == "erv_ts" ~ "ERV (Expected RV)",
-      TRUE ~ "VRP (IV - ERV)"
+    Variable = case_when(
+      Variable == "iv_ts" ~ "IV",
+      Variable == "erv_ts" ~ "ERV",
+      TRUE ~ "VRP"
     ),
+    Variable = as_factor(Variable),
     value = value * 10000
   ) |>
-  ggplot(aes(x = date, y = value, color = ` `)) +
+  ggplot(aes(x = date, y = value, color = Variable)) +
   geom_line() +
-  theme(
-    legend.position = "bottom",
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  ) +
   scale_x_date(
     expand = c(0, 0),
     date_breaks = "1 year",
@@ -246,17 +241,13 @@ p1 <- processed_data |>
   ) +
   scale_y_continuous(minor_breaks = NULL) +
   labs(
+    color = NULL,
     x = "",
     y = ""
-  )
+  ) + 
+  project_color_manual
 
-ggsave(p1 + theme(
-  axis.text.x = element_text(size = 15),
-  axis.text.y = element_text(size = 12),
-  axis.title = element_text(size = 20),
-  legend.text = element_text(size = 20),
-  strip.text = element_text(size = 14)
-),
-filename = "output/figures/iv_rv.jpeg",
+ggsave(p1,
+filename = "output/figures/vix_decomposition.jpeg",
 width = 14, height = 8
 )

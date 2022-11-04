@@ -1,10 +1,10 @@
 setwd("asset_allocation_and_liquidity")
 source("_tools.R")
 
-signature_plot <- function(p, y_axis_label = standard_y_axis_label) {
+signature_plot <- function(p, 
+                           y_axis_label = standard_y_axis_label) {
   p + geom_bar(stat = "identity", 
-               position = position_dodge(0.5), 
-               alpha = 1) +
+               position = position_dodge(0.5)) +
     geom_errorbar(aes(
       ymin = ir_lower, 
       ymax = ir_upper,

@@ -181,47 +181,42 @@ tab_total <- sample |>
   ungroup() |>
   pivot_wider(names_from = year, values_from = Mean)
 
-# VIX summaries (log changes in bp)
-vix_raw <- read_rds("data/pitrading/vix_spx_sample.rds") |>
-  group_by(date = as.Date(ts)) |>
-  mutate(VIX = 10000 * (log(VIX) - lag(log(VIX)))) |>
-  ungroup() |>
-  select(-date) |>
+# IV summaries (IV, ERV, VRP changes in bp)
+iv_raw <- read_rds("data/pitrading/variance_risk_premium.rds") |>
+  select(ts, iv, erv, vrp) |>
   inner_join(sample |> select(ts) |> unique(), by = "ts") |>
-  na.omit()
-
-vix_year <- vix_raw |>
-  group_by(
-    year = year(floor_date(ts, "year")),
-    ticker = "",
-    variable = "VIX change"
-  ) |>
+  drop_na() |>
+  pivot_longer(-ts,
+               names_to = "variable",
+               values_to = "value") |>
+  mutate(value = value * 10000)
+  
+iv_year <- iv_raw |>
+group_by(year = year(floor_date(ts, "year")), variable) |>
   summarise(
-    mean = mean(VIX, na.rm = TRUE),
-    sd = sd(VIX, na.rm = TRUE)
+    mean = mean(value, na.rm = TRUE),
+    sd = sd(value, na.rm = TRUE)
   ) |>
-  mutate(Mean = paste0(
-    round(mean, 2),
-    " (", round(sd, 2), ")"
-  )) |>
+  mutate(Mean = paste0(round(mean, 3), " (", round(sd, 3), ")")) |>
   select(-mean, -sd) |>
   ungroup() |>
   pivot_wider(names_from = year, values_from = Mean)
 
-vix_total <- vix_raw |>
-  group_by(year = "Total", ticker = "", variable = "VIX change") |>
+iv_total <- iv_raw |>
+  group_by(year = "Total", variable) |>
   summarise(
-    mean = mean(VIX, na.rm = TRUE),
-    sd = sd(VIX, na.rm = TRUE)
+    mean = mean(value, na.rm = TRUE),
+    sd = sd(value, na.rm = TRUE)
   ) |>
-  mutate(Mean = paste0(round(mean, 2), " (", round(sd, 2), ")")) |>
+  mutate(Mean = paste0(round(mean, 3), " (", round(sd, 3), ")")) |>
   select(-mean, -sd) |>
   ungroup() |>
   pivot_wider(names_from = year, values_from = Mean)
 
 tab <- tab |>
   left_join(tab_total) |>
-  bind_rows(vix_year |> left_join(vix_total))
+  bind_rows(iv_year |> left_join(iv_total) |>
+              mutate(variable = paste(str_to_upper(variable), "(changes)")))
 
 tab <- tab |>
   mutate(

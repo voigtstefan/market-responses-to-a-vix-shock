@@ -18,7 +18,7 @@ Sys.setenv(TZ = "GMT",
 Sys.setlocale("LC_TIME", 
               "English")
 
-# GGplot2 default theme 
+# ggplot2 default theme 
 
 theme_set(theme_minimal(base_size = 8) + 
             theme(axis.text.x = element_text(size = 15),

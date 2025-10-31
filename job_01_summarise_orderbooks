@@ -1,6 +1,0 @@
-#$ -N sum_lobster
-#$ -t 1:125
-#$ -e asset_allocation_and_liquidity/t_chunk
-#$ -o asset_allocation_and_liquidity/t_chunk
-#$ -l h_vmem=200000000000000G
-R --vanilla < asset_allocation_and_liquidity/01_summarise_orderbook_files.R

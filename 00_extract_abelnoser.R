@@ -1,4 +1,3 @@
-setwd("asset_allocation_and_liquidity")
 source("_tools.R")
 
 # Read in Abel Noser Data ----
@@ -16,13 +15,15 @@ raw_data <- raw_data %>%
   ) # Price for the block
 
 raw_data <- raw_data %>%
-  mutate(across(c(placement_date, last_trade_date), ~with_tz(., "GMT")),
-            intraday = (as_hms(placement_date) > as_hms("09:30:00") &
-                          as_hms(placement_date) < as_hms("16:00:00") &
-                          as_hms(last_trade_date) > as_hms("09:30:00") &
-                          as_hms(last_trade_date) < as_hms("16:00:00")),
-         placement_date = floor_date(placement_date, "5 minutes"),
-         last_trade_date = ceiling_date(last_trade_date, "5 minutes")) %>%
+  mutate(
+    across(c(placement_date, last_trade_date), ~ with_tz(., "GMT")),
+    intraday = (as_hms(placement_date) > as_hms("09:30:00") &
+      as_hms(placement_date) < as_hms("16:00:00") &
+      as_hms(last_trade_date) > as_hms("09:30:00") &
+      as_hms(last_trade_date) < as_hms("16:00:00")),
+    placement_date = floor_date(placement_date, "5 minutes"),
+    last_trade_date = ceiling_date(last_trade_date, "5 minutes")
+  ) %>%
   filter(
     ticker %in% project_tickers,
     placement_date < last_trade_date,
@@ -30,13 +31,13 @@ raw_data <- raw_data %>%
     intraday
   ) %>% # filter out observations with trade execution date before placement of order
   select(-intraday)
-  
+
 raw_data <- raw_data %>%
   mutate(
     duration = 1 / 60 * (as.integer(placement_date %--% last_trade_date)),
     volume_usd = total_shares * price_block / 1e6, # volume in million USD
     net_volume_per_minute = 5 * side * volume_usd / duration # net volume per 5 minutes
-  ) %>% 
+  ) %>%
   distinct(.keep_all = TRUE) %>%
   mutate(transaction_id = 1:n()) %>%
   select(transaction_id, everything())
@@ -75,14 +76,30 @@ sample <- read_rds("output/orderbook_sample.rds")
 # Compute aggregate client net volume ----
 
 sample <- sample %>%
-  filter(ts >= min(raw_data$placement_date), ts <= max(raw_data$last_trade_date)) %>%
-  left_join(raw_data %>%
-    group_by(ticker, ts = placement_date) %>%
-    summarise(client_net_volume = sum(net_volume_per_minute)),
-  by = c("ts", "ticker")
+  filter(
+    ts >= min(raw_data$placement_date),
+    ts <= max(raw_data$last_trade_date)
   ) %>%
-  mutate(client_net_volume = if_else(is.na(client_net_volume), 0, client_net_volume)) %>%
-  select(ts, date, ticker, signed_volume, client_net_volume, return, trading_volume, spread, depth)
+  left_join(
+    raw_data %>%
+      group_by(ticker, ts = placement_date) %>%
+      summarise(client_net_volume = sum(net_volume_per_minute)),
+    by = c("ts", "ticker")
+  ) %>%
+  mutate(
+    client_net_volume = if_else(is.na(client_net_volume), 0, client_net_volume)
+  ) %>%
+  select(
+    ts,
+    date,
+    ticker,
+    signed_volume,
+    client_net_volume,
+    return,
+    trading_volume,
+    spread,
+    depth
+  )
 
 sample %>%
   write_rds("data/AbelNoser/abel_noser_processed.rds")

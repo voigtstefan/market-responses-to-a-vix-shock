@@ -1,20 +1,20 @@
-setwd("asset_allocation_and_liquidity")
 source("_tools.R")
 
-signature_plot <- function(p, 
-                           y_axis_label = standard_y_axis_label) {
-  p + geom_bar(stat = "identity", 
-               position = position_dodge(0.5)) +
-    geom_errorbar(aes(
-      ymin = ir_lower, 
-      ymax = ir_upper,
-      color = Variable
-    ),
-    width = .2,
-    position = position_dodge(0.5)
+signature_plot <- function(p, y_axis_label = standard_y_axis_label) {
+  p +
+    geom_bar(stat = "identity", position = position_dodge(0.5)) +
+    geom_errorbar(
+      aes(
+        ymin = ir_lower,
+        ymax = ir_upper,
+        color = Variable
+      ),
+      width = .2,
+      position = position_dodge(0.5)
     ) +
     geom_hline(aes(yintercept = 0), linetype = "dotted") +
-    facet_wrap(response ~ .,
+    facet_wrap(
+      response ~ .,
       scales = "free_y",
       ncol = length(project_tickers)
     ) +
@@ -65,13 +65,19 @@ iv_decomposition <- irf_data |>
   ) |>
   signature_plot() +
   project_color_manual +
-  scale_fill_manual(values = c("VRP" = project_purple, 
-                               "ERV" = project_aquamarine, 
-                               "IV" = project_yellow))
+  scale_fill_manual(
+    values = c(
+      "VRP" = project_purple,
+      "ERV" = project_aquamarine,
+      "IV" = project_yellow
+    )
+  )
 
-ggsave(iv_decomposition,
-filename = "output/figures/irf_iv_decomposition_raw_full.jpeg",
-width = 14, height = 8
+ggsave(
+  iv_decomposition,
+  filename = "output/figures/irf_iv_decomposition_raw_full.jpeg",
+  width = 14,
+  height = 8
 )
 
 # Comparison plots (IV decomposition) across different periods -----
@@ -92,21 +98,27 @@ comparison_figures <- irf_data |>
   ) |>
   signature_plot() +
   project_color_manual +
-  scale_fill_manual(values = c("VRP" = project_purple, 
-                               "ERV" = project_aquamarine, 
-                               "IV" = project_yellow))
+  scale_fill_manual(
+    values = c(
+      "VRP" = project_purple,
+      "ERV" = project_aquamarine,
+      "IV" = project_yellow
+    )
+  )
 
 
-ggsave(comparison_figures,
-filename = "output/figures/irf_iv_decomposition_raw_periods.jpeg",
-width = 14, height = 8
+ggsave(
+  comparison_figures,
+  filename = "output/figures/irf_iv_decomposition_raw_periods.jpeg",
+  width = 14,
+  height = 8
 )
 
 # AbelNoser plots -----
 
-data_abel <- tibble(file = dir("output/irf_estimation_abel_noser/",
-  full.names = TRUE
-)) |>
+data_abel <- tibble(
+  file = dir("output/irf_estimation_abel_noser/", full.names = TRUE)
+) |>
   mutate(data = map(file, read_rds)) |>
   unnest(data) |>
   mutate(
@@ -136,15 +148,28 @@ data_abel <- tibble(file = dir("output/irf_estimation_abel_noser/",
 
 p_tmp <- data_abel |>
   mutate(Horizon = as_factor(lead)) |>
-  ggplot(aes(x = Horizon, y = ir_estimate, fill = Variable, order = Variable)) |>
-  signature_plot(y_axis_label = "ILLIQ    mUSD     bp      mUSD      bp     mUSD   mUSD\n") +
+  ggplot(aes(
+    x = Horizon,
+    y = ir_estimate,
+    fill = Variable,
+    order = Variable
+  )) |>
+  signature_plot(
+    y_axis_label = "ILLIQ    mUSD     bp      mUSD      bp     mUSD   mUSD\n"
+  ) +
   project_color_manual +
-  scale_fill_manual(values = c("VRP" = project_purple, 
-                               "ERV" = project_aquamarine, 
-                               "IV" = project_yellow))
+  scale_fill_manual(
+    values = c(
+      "VRP" = project_purple,
+      "ERV" = project_aquamarine,
+      "IV" = project_yellow
+    )
+  )
 
 
-ggsave(p_tmp,
-filename = "output/figures/irf_abelnoser_iv_decomposition_raw.jpeg",
-width = 14, height = 8
+ggsave(
+  p_tmp,
+  filename = "output/figures/irf_abelnoser_iv_decomposition_raw.jpeg",
+  width = 14,
+  height = 8
 )

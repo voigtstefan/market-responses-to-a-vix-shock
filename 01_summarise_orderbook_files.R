@@ -1,4 +1,3 @@
-setwd("asset_allocation_and_liquidity")
 source("_tools.R")
 
 # Detect existing files ----
@@ -14,15 +13,25 @@ existing_files <- tibble(
 # Detect processed files
 processed_files <- tibble(
   files = dir("data/lobster_orderbook_processed", full.names = TRUE),
-  ticker = gsub(".*lobster_orderbook_processed/(.*)_(.*)_processed.rds", "\\1", files),
-  date = gsub(".*lobster_orderbook_processed/(.*)_(.*)_processed.rds", "\\2", files)
+  ticker = gsub(
+    ".*lobster_orderbook_processed/(.*)_(.*)_processed.rds",
+    "\\1",
+    files
+  ),
+  date = gsub(
+    ".*lobster_orderbook_processed/(.*)_(.*)_processed.rds",
+    "\\2",
+    files
+  )
 ) |>
   mutate(date = as.Date(date))
 # processed_files |> write_rds("data/existing_processed_files.rds")
 
 processed_files <- read_rds("data/existing_processed_files.rds")
 
-missing_files <- anti_join(existing_files, processed_files,
+missing_files <- anti_join(
+  existing_files,
+  processed_files,
   by = c("ticker", "date")
 ) |>
   filter(ticker %in% project_tickers)
@@ -60,35 +69,38 @@ orderbook <- process_orderbook(orderbook) # (processing code in _tools.R)
 
 # Compute summary statistics
 orderbook_summaries <- orderbook |>
-  transmute(ts,
+  transmute(
+    ts,
     midquote = ask_price_1 / 2 + bid_price_1 / 2,
-    signed_volume = if_else(type == 4 | type == 5,
-      -direction * m_size,
-      0
-    ), # Execution of a sell (buy) limit order corresponds to a buyer (seller) initiated trade, i.e. buy (sell) trade.
+    signed_volume = if_else(type == 4 | type == 5, -direction * m_size, 0), # Execution of a sell (buy) limit order corresponds to a buyer (seller) initiated trade, i.e. buy (sell) trade.
     signed_volume = replace_na(signed_volume, 0),
-    trading_volume = if_else(type == 4 | type == 5,
+    trading_volume = if_else(
+      type == 4 | type == 5,
       m_price * m_size,
       as.double(NA)
     ),
     depth0_bid = bid_size_1,
     depth0_ask = ask_size_1,
-    depth5_bid = orderbook |> compute_depth(
-      side = "bid",
-      bp = 5
-    ),
-    depth5_ask = orderbook |> compute_depth(
-      side = "ask",
-      bp = 5
-    ),
-    depth50_bid = orderbook |> compute_depth(
-      side = "bid",
-      bp = 50
-    ),
-    depth50_ask = orderbook |> compute_depth(
-      side = "ask",
-      bp = 50
-    ),
+    depth5_bid = orderbook |>
+      compute_depth(
+        side = "bid",
+        bp = 5
+      ),
+    depth5_ask = orderbook |>
+      compute_depth(
+        side = "ask",
+        bp = 5
+      ),
+    depth50_bid = orderbook |>
+      compute_depth(
+        side = "bid",
+        bp = 50
+      ),
+    depth50_ask = orderbook |>
+      compute_depth(
+        side = "ask",
+        bp = 50
+      ),
     spread = 10000 * (ask_price_1 - bid_price_1) / midquote
   ) |>
   mutate(
@@ -114,13 +126,16 @@ orderbook_summaries <- orderbook |>
   )
 
 # Create output tibble ----
-full_grid <- tibble(ts_minute = seq(
-  from = as.POSIXct(paste0(date, "09:35:00"), tz = "GMT"),
-  to = as.POSIXct(paste0(date, "16:00:00"), tz = "GMT"),
-  "5 min"
-))
+full_grid <- tibble(
+  ts_minute = seq(
+    from = as.POSIXct(paste0(date, "09:35:00"), tz = "GMT"),
+    to = as.POSIXct(paste0(date, "16:00:00"), tz = "GMT"),
+    "5 min"
+  )
+)
 
-orderbook_summaries <- left_join(full_grid,
+orderbook_summaries <- left_join(
+  full_grid,
   orderbook_summaries,
   by = "ts_minute"
 ) |>
@@ -134,24 +149,36 @@ orderbook_summaries <- left_join(full_grid,
     depth0_ask,
     spread
   ) |> # stale variables
-  mutate(across(c(
-    n_messages,
-    signed_volume,
-    trading_volume,
-    n_trades
-  ), ~ replace_na(., 0)), # set to 0 if no observation
-  date = as.Date(date), # identifying information
-  ticker = ticker,
-  return = 10000 * (log(midquote) - log(lag(midquote)))
+  mutate(
+    across(
+      c(
+        n_messages,
+        signed_volume,
+        trading_volume,
+        n_trades
+      ),
+      ~ replace_na(., 0)
+    ), # set to 0 if no observation
+    date = as.Date(date), # identifying information
+    ticker = ticker,
+    return = 10000 * (log(midquote) - log(lag(midquote)))
   ) |> # return in basis point
   select(
     ts = ts_minute,
-    date, ticker, everything()
+    date,
+    ticker,
+    everything()
   ) |>
-  mutate(include_in_sample = if_else(as_hms(ts) >= as_hms("10:00:00") &
-    as_hms(ts) <= as_hms("15:30:00") &
-    as_hms(ts) > as_hms(opening_auction + minutes(30)) &
-    as_hms(ts) < as_hms(closing_auction - minutes(30)), TRUE, FALSE))
+  mutate(
+    include_in_sample = if_else(
+      as_hms(ts) >= as_hms("10:00:00") &
+        as_hms(ts) <= as_hms("15:30:00") &
+        as_hms(ts) > as_hms(opening_auction + minutes(30)) &
+        as_hms(ts) < as_hms(closing_auction - minutes(30)),
+      TRUE,
+      FALSE
+    )
+  )
 
 avg_trade_size <- orderbook |>
   filter(type == 5 | type == 4) |>
@@ -161,7 +188,9 @@ orderbook_summaries <- bind_cols(orderbook_summaries, avg_trade_size) # Average 
 # Store output ----
 store_output <- paste0(
   "data/lobster_orderbook_processed/",
-  ticker, "_",
-  date, "_processed.rds"
+  ticker,
+  "_",
+  date,
+  "_processed.rds"
 )
 write_rds(orderbook_summaries, store_output)

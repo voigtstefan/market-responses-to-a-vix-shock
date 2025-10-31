@@ -1,4 +1,3 @@
-setwd("asset_allocation_and_liquidity")
 source("_tools.R")
 
 # Read in and prepare sample ----
@@ -6,8 +5,14 @@ full_sample <- read_rds("output/orderbook_sample.rds")
 full_sample <- full_sample |>
   filter(ticker %in% project_tickers) |>
   select(
-    ts, ticker,
-    signed_volume, trading_volume, depth, return, spread, amihud
+    ts,
+    ticker,
+    signed_volume,
+    trading_volume,
+    depth,
+    return,
+    spread,
+    amihud
   )
 
 full_sample <- full_sample |>
@@ -74,7 +79,9 @@ sample <- full_sample |>
     ts <= end_date
   )
 
-if (standardize) sample <- sample |> mutate(across(c(-ts), scale_variables))
+if (standardize) {
+  sample <- sample |> mutate(across(c(-ts), scale_variables))
+}
 
 if (shocked_variable == "iv") {
   sample <- sample |> select(-erv, -vrp)
@@ -85,22 +92,22 @@ if (shocked_variable == "iv") {
 # Choosing the shock: Generalized impulse response function based on VAR ----
 
 # Automatic lag selection for entire system
-lag_selection <- vars::VARselect(sample |> select(-ts) |> as.matrix(), type = "none", lag.max = 4)
+lag_selection <- vars::VARselect(
+  sample |> select(-ts) |> as.matrix(),
+  type = "none",
+  lag.max = 4
+)
 lags <- lag_selection$selection[1]
 
-asymptotic_d <- asymptotic_distribution_of_shock(sample,
+asymptotic_d <- asymptotic_distribution_of_shock(
+  sample,
   shocked_variable,
   p = lags
 )
 
 # Estimate the impulse response function ----
 
-irf <- compute_irf(sample,
-  asymptotic_d,
-  i = i,
-  leads = 12,
-  p = lags
-)
+irf <- compute_irf(sample, asymptotic_d, i = i, leads = 12, p = lags)
 
 irf <- irf |>
   mutate(
@@ -111,5 +118,35 @@ irf <- irf |>
   )
 
 # Store results ----
-if (standardize) write_rds(irf, file = paste0("output/irf_estimation/irf_estimates_standardized_", period, "_", shocked_variable, "_", fixed_shock, "_", names(sample)[-1][i], ".rds"))
-if (!standardize) write_rds(irf, file = paste0("output/irf_estimation/irf_estimates_", period, "_", shocked_variable, "_", fixed_shock, "_", names(sample)[-1][i], ".rds"))
+if (standardize) {
+  write_rds(
+    irf,
+    file = paste0(
+      "output/irf_estimation/irf_estimates_standardized_",
+      period,
+      "_",
+      shocked_variable,
+      "_",
+      fixed_shock,
+      "_",
+      names(sample)[-1][i],
+      ".rds"
+    )
+  )
+}
+if (!standardize) {
+  write_rds(
+    irf,
+    file = paste0(
+      "output/irf_estimation/irf_estimates_",
+      period,
+      "_",
+      shocked_variable,
+      "_",
+      fixed_shock,
+      "_",
+      names(sample)[-1][i],
+      ".rds"
+    )
+  )
+}

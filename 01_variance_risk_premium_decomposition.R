@@ -1,4 +1,3 @@
-setwd("asset_allocation_and_liquidity")
 source("_tools.R")
 
 # Read in SPX and VIX files ----
@@ -26,10 +25,17 @@ all_dates <- data |>
 # 2 helper functions to compute future and past realized volatility
 change_date_back <- function(., lag = 21) {
   tibble(date = as.Date(.)) |>
-    left_join(all_dates |>
-      mutate(lagged_date = lag(date, lag)), by = "date") |>
+    left_join(
+      all_dates |>
+        mutate(lagged_date = lag(date, lag)),
+      by = "date"
+    ) |>
     mutate(
-      lagged_date = if_else(is.na(lagged_date), as.Date("2000-01-01"), lagged_date),
+      lagged_date = if_else(
+        is.na(lagged_date),
+        as.Date("2000-01-01"),
+        lagged_date
+      ),
       lagged_date = as.POSIXct(paste(lagged_date, "09:35"), tz = "GMT")
     ) |>
     pull(lagged_date)
@@ -46,18 +52,28 @@ change_date_forward <- function(dat, lead = 22) {
 
 data <- data |>
   mutate(
-    RV21 = slider::slide_index_dbl(squared_return, ts, sum,
+    RV21 = slider::slide_index_dbl(
+      squared_return,
+      ts,
+      sum,
       .before = ~ change_date_back(., lag = 21),
       .complete = TRUE
     ),
-    RV4 = slider::slide_index_dbl(squared_return, ts, sum,
+    RV4 = slider::slide_index_dbl(
+      squared_return,
+      ts,
+      sum,
       .before = ~ change_date_back(., lag = 4),
       .complete = TRUE
     ),
-    ftr_realized_variance = slider::slide_index_dbl(squared_return, ts, sum,
+    ftr_realized_variance = slider::slide_index_dbl(
+      squared_return,
+      ts,
+      sum,
       .after = ~ change_date_forward(., lead = 22),
       .complete = TRUE
-    ) - squared_return, # subtract squared_return because slider includes the current time stamp
+    ) -
+      squared_return, # subtract squared_return because slider includes the current time stamp
     future_date = change_date_forward(ts)
   ) # Indicates required information to observe ftr_realized_variance
 
@@ -74,9 +90,7 @@ data_nested <- data |>
     static_RV21 = RV21 - tilde_R
   ) |> # Exclude any intraday data
   mutate(across(
-    c(tilde_R:ftr_realized_variance, 
-      static_RV4, 
-      static_RV21),
+    c(tilde_R:ftr_realized_variance, static_RV4, static_RV21),
     ~ log(1e-16 + .)
   )) |>
   nest()
@@ -86,7 +100,9 @@ data_nested <- data |>
 
 regression_parameters <- data_nested |>
   mutate(
-    lm = map(data, function(.) lm(ftr_realized_variance ~ RV21 + RV4 + tilde_R, data = .)),
+    lm = map(data, function(.) {
+      lm(ftr_realized_variance ~ RV21 + RV4 + tilde_R, data = .)
+    }),
     values = map(lm, broom::tidy)
   ) |>
   select(time, values) |>
@@ -100,34 +116,58 @@ full_regression_paramaters <- data |>
 
 p1 <- regression_parameters |>
   left_join(full_regression_paramaters, by = "term") |>
-  mutate(term = case_when(
-    term == "tilde_R" ~ "RV (intraday)",
-    TRUE ~ term
-  )) |>
+  mutate(
+    term = case_when(
+      term == "tilde_R" ~ "RV (intraday)",
+      TRUE ~ term
+    )
+  ) |>
   filter(term != "(Intercept)") |>
   ggplot(aes(x = time, y = estimate)) +
   facet_wrap(~term, scales = "free_y", ncol = 1) +
-  geom_hline(aes(yintercept = estimate_full), linetype = "dotted", color = "red") +
+  geom_hline(
+    aes(yintercept = estimate_full),
+    linetype = "dotted",
+    color = "red"
+  ) +
   geom_line() +
   theme_minimal() +
   theme(legend.position = "None") +
   labs(x = "", y = "Estimate") +
-  geom_errorbar(aes(
-    ymin = estimate - 1.95 * std.error,
-    ymax = estimate + 1.95 * std.error
-  ),
-  position = position_dodge(.9), alpha = 0.2
+  geom_errorbar(
+    aes(
+      ymin = estimate - 1.95 * std.error,
+      ymax = estimate + 1.95 * std.error
+    ),
+    position = position_dodge(.9),
+    alpha = 0.2
   )
 
 # Estimation accuracy (adjusted R square)
 m1_fit <- data_nested |>
-  mutate(m1_lm = map(data, function(.) lm(ftr_realized_variance ~ RV21 + RV4 + tilde_R, .))) |>
-  mutate(m1_fit = map(m1_lm, function(.) broom::glance(.) |> transmute(model = "Benchmark", adj.r.squared))) |>
+  mutate(
+    m1_lm = map(data, function(.) {
+      lm(ftr_realized_variance ~ RV21 + RV4 + tilde_R, .)
+    })
+  ) |>
+  mutate(
+    m1_fit = map(m1_lm, function(.) {
+      broom::glance(.) |> transmute(model = "Benchmark", adj.r.squared)
+    })
+  ) |>
   unnest(m1_fit)
 
 m2_fit <- data_nested |>
-  mutate(m2_lm = map(data, function(.) lm(ftr_realized_variance ~ static_RV21 + static_RV4, .))) |>
-  mutate(m2_fit = map(m2_lm, function(.) broom::glance(.) |> transmute(model = "Restricted", adj.r.squared))) |>
+  mutate(
+    m2_lm = map(data, function(.) {
+      lm(ftr_realized_variance ~ static_RV21 + static_RV4, .)
+    })
+  ) |>
+  mutate(
+    m2_fit = map(m2_lm, function(.) {
+      broom::glance(.) |> transmute(model = "Restricted", adj.r.squared)
+    })
+  ) |>
   unnest(m2_fit)
 
 p2 <- bind_rows(m1_fit, m2_fit) |>
@@ -141,24 +181,28 @@ p2 <- bind_rows(m1_fit, m2_fit) |>
   ) +
   labs(x = "", y = "Adjusted R squared", color = NULL)
 
-p3 <- (p1 + theme(
-  axis.text.x = element_text(size = 15),
-  axis.text.y = element_text(size = 12),
-  axis.title = element_text(size = 20),
-  strip.text = element_text(size = 14),
-  legend.text = element_text(size = 14)
-)
-) / (p2 + theme(
-  axis.text.x = element_text(size = 15),
-  axis.text.y = element_text(size = 12),
-  axis.title = element_text(size = 20),
-  strip.text = element_text(size = 14),
-  legend.text = element_text(size = 14)
-))
+p3 <- (p1 +
+  theme(
+    axis.text.x = element_text(size = 15),
+    axis.text.y = element_text(size = 12),
+    axis.title = element_text(size = 20),
+    strip.text = element_text(size = 14),
+    legend.text = element_text(size = 14)
+  )) /
+  (p2 +
+    theme(
+      axis.text.x = element_text(size = 15),
+      axis.text.y = element_text(size = 12),
+      axis.title = element_text(size = 20),
+      strip.text = element_text(size = 14),
+      legend.text = element_text(size = 14)
+    ))
 
-ggsave(p3,
+ggsave(
+  p3,
   filename = "output/figures/regression_coefficients_erv.jpeg",
-  width = 14, height = 8
+  width = 14,
+  height = 8
 )
 
 # Rolling window regressions for prediction ----
@@ -166,29 +210,32 @@ get_prediction <- function(tmp_data) {
   .x_data <- tmp_data |>
     mutate(available_data = future_date < max(ts)) |>
     mutate(across(c(tilde_R:ftr_realized_variance), ~ log(1e-16 + .)))
-  fit <- lm(ftr_realized_variance ~ RV21 + RV4 + tilde_R,
+  fit <- lm(
+    ftr_realized_variance ~ RV21 + RV4 + tilde_R,
     data = .x_data |> filter(available_data)
   )
-  oos_prediction <- bind_cols(.x_data,
-    prediction = predict(fit, .x_data)
-  ) |>
+  oos_prediction <- bind_cols(.x_data, prediction = predict(fit, .x_data)) |>
     mutate(prediction = exp(prediction) - 1e-16)
   return(oos_prediction |> tail(1) |> pull(prediction))
 }
 
 rv_predictions <- data |>
   group_by(time) |>
-  mutate(predicted_rv = slider::slide(
-    .x = cur_data(),
-    .f = ~ get_prediction(.x),
-    .before = 250,
-    .complete = TRUE
-  )) |>
+  mutate(
+    predicted_rv = slider::slide(
+      .x = cur_data(),
+      .f = ~ get_prediction(.x),
+      .before = 250,
+      .complete = TRUE
+    )
+  ) |>
   unnest(predicted_rv)
 
 processed_data <- data |>
-  left_join(rv_predictions |> select(date, time, predicted_rv), 
-            by = c("date", "time")) |>
+  left_join(
+    rv_predictions |> select(date, time, predicted_rv),
+    by = c("date", "time")
+  ) |>
   mutate(
     iv_ts = VIX^2 / 120000,
     erv_ts = predicted_rv,
@@ -220,9 +267,7 @@ p1 <- processed_data |>
   group_by(date) |>
   select(date, ts, iv_ts, erv_ts, vrp_ts) |>
   summarise_all(median) |>
-  pivot_longer(iv_ts:last_col(),
-               names_to = "Variable"
-  ) |>
+  pivot_longer(iv_ts:last_col(), names_to = "Variable") |>
   mutate(
     Variable = case_when(
       Variable == "iv_ts" ~ "IV",
@@ -244,10 +289,12 @@ p1 <- processed_data |>
     color = NULL,
     x = "",
     y = ""
-  ) + 
+  ) +
   project_color_manual
 
-ggsave(p1,
-filename = "output/figures/vix_decomposition.jpeg",
-width = 14, height = 8
+ggsave(
+  p1,
+  filename = "output/figures/vix_decomposition.jpeg",
+  width = 14,
+  height = 8
 )

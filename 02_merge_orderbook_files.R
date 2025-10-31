@@ -1,11 +1,18 @@
-setwd("asset_allocation_and_liquidity")
 source("_tools.R")
 
 # Read in existing files ----
 existing_files <- tibble(
   files = dir("data/lobster_orderbook_processed", full.names = TRUE),
-  ticker = gsub(".*/lobster_orderbook_processed/(.*)_(.*)_processed.rds", "\\1", files),
-  date = gsub(".*/lobster_orderbook_processed/(.*)_(.*)_processed.rds", "\\2", files)
+  ticker = gsub(
+    ".*/lobster_orderbook_processed/(.*)_(.*)_processed.rds",
+    "\\1",
+    files
+  ),
+  date = gsub(
+    ".*/lobster_orderbook_processed/(.*)_(.*)_processed.rds",
+    "\\2",
+    files
+  )
 ) |>
   mutate(date = as.Date(date))
 
@@ -30,20 +37,27 @@ data <- data |>
 # The Flash Crash period playing out strongest in the interval 2010-05-06 14:40:00 and the following ten minutes
 
 data <- data |>
-  filter(ts < ymd_hms("2008-04-29 13:30:00") | ts > ymd_hms("2008-04-29 13:40:00")) |>
-  filter(ts < ymd_hms("2010-05-06 14:40:00") | ts > ymd_hms("2010-05-06 14:50:00"))
+  filter(
+    ts < ymd_hms("2008-04-29 13:30:00") | ts > ymd_hms("2008-04-29 13:40:00")
+  ) |>
+  filter(
+    ts < ymd_hms("2010-05-06 14:40:00") | ts > ymd_hms("2010-05-06 14:50:00")
+  )
 
 # Compute rolling median midquotes (12 months) ----
 
 data <- data |>
   group_by(ticker) |>
   arrange(ticker, ts) |>
-  mutate(median_midquote = slider::slide_index_dbl(midquote,
-    date,
-    median,
-    .before = ~ . %m-% months(12),
-    .complete = FALSE
-  ))
+  mutate(
+    median_midquote = slider::slide_index_dbl(
+      midquote,
+      date,
+      median,
+      .before = ~ . %m-% months(12),
+      .complete = FALSE
+    )
+  )
 
 # Prepare variables ----
 sample <- data |>
@@ -81,7 +95,8 @@ sample <- read_rds("output/orderbook_sample.rds")
 # Summary plot with annualized Boxplots ----
 p <- sample |>
   transform_ticker_to_names() |>
-  select(ts,
+  select(
+    ts,
     ticker,
     "Initiator Net Volume" = "signed_volume",
     "Returns" = "return",
@@ -105,13 +120,10 @@ p <- sample |>
   mutate(group = fct_reorder(group, order)) |>
   ggplot(aes(ts, value)) +
   geom_boxplot(aes(group = ts), outlier.alpha = 0.1) +
-  facet_wrap(~group,
-    ncol = length(project_tickers),
-    scales = "free_y"
-  ) +
+  facet_wrap(~group, ncol = length(project_tickers), scales = "free_y") +
   theme(
     legend.position = "bottom",
-    panel.grid.major = element_blank(), 
+    panel.grid.major = element_blank(),
     panel.grid.minor = element_blank()
   ) +
   scale_x_date(
@@ -125,14 +137,17 @@ p <- sample |>
   ) +
   geom_hline(aes(yintercept = 0), linetype = "dotted")
 
-ggsave(p + theme(
-  axis.text.x = element_text(size = 12),
-  axis.text.y = element_text(size = 12),
-  axis.title = element_text(size = 19),
-  strip.text = element_text(size = 14)
-),
-filename = "output/figures/sample_summaries.jpeg",
-width = 14, height = 8
+ggsave(
+  p +
+    theme(
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      axis.title = element_text(size = 19),
+      strip.text = element_text(size = 14)
+    ),
+  filename = "output/figures/sample_summaries.jpeg",
+  width = 14,
+  height = 8
 )
 
 # Summary statistics table ----
@@ -144,7 +159,8 @@ tab <- sample |>
     avg_trade_size = avg_trade_size / 100000
   ) |>
   select(-midquote, -n_trades, -n_messages) |>
-  pivot_longer(signed_volume:last_col(),
+  pivot_longer(
+    signed_volume:last_col(),
     names_to = "variable",
     values_to = "value"
   ) |>
@@ -167,7 +183,8 @@ tab_total <- sample |>
     avg_trade_size = avg_trade_size / 100000
   ) |>
   select(-midquote, -n_trades, -n_messages) |>
-  pivot_longer(signed_volume:last_col(),
+  pivot_longer(
+    signed_volume:last_col(),
     names_to = "variable",
     values_to = "value"
   ) |>
@@ -186,13 +203,11 @@ iv_raw <- read_rds("data/pitrading/variance_risk_premium.rds") |>
   select(ts, iv, erv, vrp) |>
   inner_join(sample |> select(ts) |> unique(), by = "ts") |>
   drop_na() |>
-  pivot_longer(-ts,
-               names_to = "variable",
-               values_to = "value") |>
+  pivot_longer(-ts, names_to = "variable", values_to = "value") |>
   mutate(value = value * 10000)
-  
+
 iv_year <- iv_raw |>
-group_by(year = year(floor_date(ts, "year")), variable) |>
+  group_by(year = year(floor_date(ts, "year")), variable) |>
   summarise(
     mean = mean(value, na.rm = TRUE),
     sd = sd(value, na.rm = TRUE)
@@ -215,8 +230,11 @@ iv_total <- iv_raw |>
 
 tab <- tab |>
   left_join(tab_total) |>
-  bind_rows(iv_year |> left_join(iv_total) |>
-              mutate(variable = paste(str_to_upper(variable), "(changes)")))
+  bind_rows(
+    iv_year |>
+      left_join(iv_total) |>
+      mutate(variable = paste(str_to_upper(variable), "(changes)"))
+  )
 
 tab <- tab |>
   mutate(
@@ -239,11 +257,7 @@ tab <- tab |>
   )
 
 names(tab)[1:2] <- c(" ", " ")
-kable(tab,
-  booktabs = TRUE,
-  digits = 3,
-  escape = FALSE
-) |>
+kable(tab, booktabs = TRUE, digits = 3, escape = FALSE) |>
   kableExtra::kable_styling(latex_options = "scale_down") |>
   kableExtra::collapse_rows(latex_hline = "major") |>
   cat(file = "output/summary_stats.tex")

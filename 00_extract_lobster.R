@@ -1,10 +1,10 @@
 source("_tools.R")
 
 existing_files <- tibble(
-  files = dir("data/lobster_raw", full.names = FALSE),
-  ticker = gsub("(.*)_(.*)_3420.*0_.*_(.*).csv", "\\1", files),
-  date = gsub("(.*)_(.*)_3420.*0_.*_(.*).csv", "\\2", files),
-  level = gsub("(.*)_(.*)_3420.*0_.*_(.*).csv", "\\3", files)
+  files = dir("data/lobster-orderbook", full.names = FALSE),
+  ticker = gsub("(.*)_(.*)_249.*0_.*_(.*).csv", "\\1", files),
+  date = gsub("(.*)_(.*)_249.*0_.*_(.*).csv", "\\2", files),
+  level = gsub("(.*)_(.*)_249.*0_.*_(.*).csv", "\\3", files)
 ) |>
   group_by(ticker, date) |>
   filter(row_number() == 2) |>
@@ -35,20 +35,20 @@ level <- existing_files |>
 
 # Read in Messages
 messages_filename <- paste0(
-  "data/lobster_raw/",
+  "data/lobster-orderbook/",
   ticker,
   "_",
   date,
-  "_34200000_57600000_message_",
+  "_24900000_57900000_message_",
   level,
   ".csv"
 )
 orderbook_filename <- paste0(
-  "data/lobster_raw/",
+  "data/lobster-orderbook/",
   ticker,
   "_",
   date,
-  "_34200000_57600000_orderbook_",
+  "_24900000_57900000_orderbook_",
   level,
   ".csv"
 )
@@ -98,12 +98,13 @@ orderbook_raw <- read_csv(
 orderbook <- bind_cols(messages_raw, orderbook_raw)
 
 store_output <- paste0(
-  "data/lobster_orderbook/",
+  "data/lobster-database/",
   ticker,
   "_",
   date,
-  "_orderbook.rds"
+  ".parquet"
 )
-write_rds(orderbook, store_output, "gz")
+
+arrow::write_parquet(orderbook, store_output)
 
 unlink(c(messages_filename, orderbook_filename)) # Remove raw files after processing

@@ -2,8 +2,8 @@
 .Rhistory
 .RData
 .Ruserdata
-data/
-output/
+data/*
+output/*
 renv/
-non_core_analysis/
+non_core_analysis/*
 .Renviron

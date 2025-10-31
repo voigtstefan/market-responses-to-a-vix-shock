@@ -5,5 +5,5 @@
 data/*
 output/*
 renv/
-non_core_analysis/
+non-core-analysis/
 .Renviron

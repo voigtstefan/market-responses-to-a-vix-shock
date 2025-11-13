@@ -1,4 +1,9 @@
-source("_tools.R")
+library(readr)
+library(dplyr)
+library(lubridate)
+library(hms)
+library(arrow)
+source("project-variables.R")
 
 # Read in SPX data (5 minute close prices) ----
 spx_data <- read_csv("data/pitrading/SPX.txt")
@@ -50,6 +55,5 @@ data <- full_join(spx_data, vix_data, by = "ts") |>
     date = as.Date(ts),
     time = as_hms(ts)
   ) |>
-  select(ts, date, time, everything())
-
-write_rds(data, file = "data/pitrading/vix_spx_sample.rds")
+  select(ts, date, time, everything()) |>
+  write_parquet("data/pitrading/vix_spx_sample.parquet")

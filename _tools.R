@@ -1,8 +1,3 @@
-# Global settings ----
-options(knitr.table.format = "latex")
-Sys.setenv(TZ = "GMT", LANG = "en")
-Sys.setlocale("LC_TIME", "English")
-
 # ggplot2 default theme
 
 theme_set(

@@ -1,7 +1,14 @@
-source("_tools.R")
+library(dplyr)
+library(arrow)
+library(tidyr)
+library(lubridate)
+library(purrr)
+library(ggplot2)
+library(patchwork)
+source("_project-variables.R")
 
 # Read in SPX and VIX files ----
-data <- read_rds("data/pitrading/vix_spx_sample.rds")
+data <- read_parquet("data/pitrading/vix_spx_sample.parquet")
 
 # Create SPX log returns, squared log returns and lagged RVs ----
 # Compute the sum of squared returns which goes back 21 (4) days in our
@@ -40,6 +47,7 @@ change_date_back <- function(., lag = 21) {
     ) |>
     pull(lagged_date)
 }
+
 change_date_forward <- function(dat, lead = 22) {
   tibble(date = as.Date(dat)) |>
     left_join(all_dates |> mutate(lead_date = lead(date, lead)), by = "date") |>
@@ -250,17 +258,15 @@ processed_data <- processed_data |>
   group_by(date = as.Date(ts)) |>
   mutate(
     erv = erv_ts - lag(erv_ts),
-    foresight_erv = foresight_erv_ts - lag(foresight_erv_ts),
     iv = iv_ts - lag(iv_ts),
-    vrp = vrp_ts - lag(vrp_ts),
-    foresight_vrp = foresight_vrp_ts - lag(foresight_vrp_ts)
+    vrp = vrp_ts - lag(vrp_ts)
   ) |>
   ungroup()
 
-processed_data |> write_rds("data/pitrading/variance_risk_premium.rds")
+processed_data |> write_parquet("data/pitrading/variance_risk_premium.parquet")
 
 # Plot VIX and future realized volatility ----
-processed_data <- read_rds("data/pitrading/variance_risk_premium.rds")
+processed_data <- read_parquet("data/pitrading/variance_risk_premium.parquet")
 
 p1 <- processed_data |>
   drop_na() |>

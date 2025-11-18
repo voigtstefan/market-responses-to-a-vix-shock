@@ -15,7 +15,7 @@ project_tickers <- c("SPY", "TLT")
 minutes <- c(0, 20, 40, 60)
 number_of_levels <- 50
 start_date <- "2007-07-01"
-end_date <- "2021-04-07"
+end_date <- "2025-10-30"
 
 standard_y_axis_label <- "ILLIQ        mUSD      bp       mUSD        bp        mUSD\n"
 

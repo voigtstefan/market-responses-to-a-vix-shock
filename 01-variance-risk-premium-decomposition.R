@@ -5,6 +5,7 @@ library(lubridate)
 library(purrr)
 library(ggplot2)
 library(patchwork)
+library(forcats)
 source("_project-variables.R")
 
 # Read in SPX and VIX files ----

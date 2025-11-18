@@ -3,7 +3,7 @@ library(dplyr)
 library(lubridate)
 library(hms)
 library(arrow)
-source("project-variables.R")
+source("_project-variables.R")
 
 # Read in SPX data (5 minute close prices) ----
 spx_data <- read_csv("data/pitrading/SPX.txt")

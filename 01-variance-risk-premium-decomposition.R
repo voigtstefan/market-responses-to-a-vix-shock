@@ -7,6 +7,7 @@ library(ggplot2)
 library(patchwork)
 library(forcats)
 source("_project-variables.R")
+source("_project-tools.R")
 
 # Read in SPX and VIX files ----
 data <- read_parquet("data/pitrading/vix_spx_sample.parquet")

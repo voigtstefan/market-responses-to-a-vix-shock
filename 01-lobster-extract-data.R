@@ -1,15 +1,13 @@
-library(stringr)
-library(dplyr)
-library(lubridate)
-library(glue)
-library(tidyr)
-library(data.table)
-library(purrr)
-library(furrr)
-library(hms)
+library(archive)
 library(arrow)
-
-plan(multisession, workers = 4)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(glue)
+library(data.table)
+library(lubridate)
+library(hms)
+library(purrr)
 
 compute_depth <- function(df, side = "bid", bp = 0) {
   mat <- as.matrix(df)
@@ -32,42 +30,6 @@ compute_depth <- function(df, side = "bid", bp = 0) {
 
   return(sum_vector)
 }
-
-ticker <- "TLT"
-existing_files <- tibble(
-  path = list.files(
-    glue("data/lobster-orderbook"),
-    full.names = TRUE
-  )
-) |>
-  mutate(
-    info = str_match(
-      basename(path),
-      "^([A-Z]+)_([0-9]{4}-[0-9]{2}-[0-9]{2})_\\d+_\\d+_([a-z]+)_([0-9]+)\\.csv$"
-    ) |>
-      as.data.frame()
-  ) |>
-  mutate(
-    ticker = info$V2,
-    date = as.Date(info$V3),
-    filetype = info$V4,
-    level = as.integer(info$V5)
-  ) |>
-  select(-info) |>
-  pivot_wider(
-    names_from = filetype,
-    values_from = path,
-    names_glue = "{filetype}_file"
-  )
-
-processed_files <- open_dataset("data/lobster-database/") |>
-  distinct(ticker, date) |>
-  collect()
-
-existing_files <- existing_files |>
-  anti_join(processed_files, by = join_by(ticker, date))
-
-# Process files
 
 extract_data <- function(
   ticker,
@@ -372,7 +334,63 @@ extract_data <- function(
   return()
 }
 
-extract_data <- safely(extract_data)
+if (!file.exists("data/tmp-lobster-processed-files.parquet")) {
+  recently_added <- open_dataset("data/lobster-database/") |>
+    distinct(ticker, date) |>
+    collect()
+  open_dataset("data/lobster-clean-database/") |>
+    distinct(ticker, date) |>
+    collect() |>
+    bind_rows(recently_added) |>
+    write_parquet("data/tmp-lobster-processed-files.parquet")
+}
 
-existing_files |>
-  future_pmap(extract_data)
+processed_files <- read_parquet("data/lobster-processed-files.parquet")
+
+if (!file.exists("data/tmp-lobster-existing-files.parquet")) {
+  tibble(
+    zip_file = list.files("data/lobster-orderbook/", full.names = "TRUE")
+  ) |>
+    mutate(files = map(zip_file, ~ archive::archive(.x))) |>
+    unnest(files) |>
+    select(zip_file, path) |>
+    extract(
+      col = path,
+      into = c("ticker", "date", NA, NA, "filetype", "level"),
+      regex = "^([A-Z]+)_([0-9]{4}-[0-9]{2}-[0-9]{2})_(\\d+)_(\\d+)_([a-z]+)_([0-9]+)\\.csv$",
+      remove = FALSE
+    ) |>
+    mutate(date = as.Date(date), level = as.integer(level)) |>
+    pivot_wider(
+      names_from = filetype,
+      values_from = path,
+      names_glue = "{filetype}_file"
+    ) |>
+    select(zip_file, ticker, date, level, message_file, orderbook_file) |>
+    write_parquet("data/tmp-lobster-existing-files.parquet")
+}
+existing_files <- read_parquet("data/tmp-lobster-existing-files.parquet")
+
+files_to_process <- existing_files |>
+  anti_join(processed_files, by = c("ticker", "date"))
+
+for (task_id in 1:nrow(files_to_process)) {
+  #task_id <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", "1"))
+  tmp_file <- files_to_process |> slice(task_id)
+
+  archive::archive_extract(
+    tmp_file$zip_file,
+    file = c(tmp_file$message_file, tmp_file$orderbook_file),
+    dir = glue("data/tmp-{task_id}/")
+  )
+
+  tmp_file |>
+    mutate(across(
+      c(message_file, orderbook_file),
+      ~ glue("data/tmp-{task_id}/", .x)
+    )) |>
+    select(-zip_file) |>
+    pmap(extract_data)
+
+  unlink(glue("data/tmp-{task_id}/"), recursive = TRUE)
+}

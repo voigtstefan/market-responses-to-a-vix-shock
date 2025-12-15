@@ -21,5 +21,6 @@ lobster_archive <- account_archive(account_login = lobster_login)
 data_download(
   requested_data = lobster_archive,
   account_login = lobster_login,
-  path = "data/lobster-orderbook"
+  path = "data/lobster-orderbook",
+  unzip = FALSE
 )

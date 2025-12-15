@@ -345,7 +345,7 @@ if (!file.exists("data/tmp-lobster-processed-files.parquet")) {
     write_parquet("data/tmp-lobster-processed-files.parquet")
 }
 
-processed_files <- read_parquet("data/lobster-processed-files.parquet")
+processed_files <- read_parquet("data/tmp-lobster-processed-files.parquet")
 
 if (!file.exists("data/tmp-lobster-existing-files.parquet")) {
   tibble(

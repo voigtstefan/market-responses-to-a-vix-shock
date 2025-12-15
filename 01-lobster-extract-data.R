@@ -1,13 +1,15 @@
-library(archive)
-library(arrow)
-library(dplyr)
-library(tidyr)
-library(stringr)
-library(glue)
-library(data.table)
-library(lubridate)
-library(hms)
-library(purrr)
+suppressPackageStartupMessages({
+  library(archive)
+  library(arrow)
+  library(dplyr)
+  library(tidyr)
+  library(stringr)
+  library(glue)
+  library(data.table)
+  library(lubridate)
+  library(hms)
+  library(purrr)
+})
 
 compute_depth <- function(df, side = "bid", bp = 0) {
   mat <- as.matrix(df)
@@ -342,6 +344,7 @@ if (!file.exists("data/tmp-lobster-processed-files.parquet")) {
     distinct(ticker, date) |>
     collect() |>
     bind_rows(recently_added) |>
+    distinct(ticker, date) |>
     write_parquet("data/tmp-lobster-processed-files.parquet")
 }
 
@@ -374,23 +377,21 @@ existing_files <- read_parquet("data/tmp-lobster-existing-files.parquet")
 files_to_process <- existing_files |>
   anti_join(processed_files, by = c("ticker", "date"))
 
-for (task_id in 1:nrow(files_to_process)) {
-  #task_id <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", "1"))
-  tmp_file <- files_to_process |> slice(task_id)
+task_id <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", "1"))
+tmp_file <- files_to_process |> slice(task_id)
 
-  archive::archive_extract(
-    tmp_file$zip_file,
-    file = c(tmp_file$message_file, tmp_file$orderbook_file),
-    dir = glue("data/tmp-{task_id}/")
-  )
+archive::archive_extract(
+  tmp_file$zip_file,
+  file = c(tmp_file$message_file, tmp_file$orderbook_file),
+  dir = glue("data/tmp-{task_id}/")
+)
 
-  tmp_file |>
-    mutate(across(
-      c(message_file, orderbook_file),
-      ~ glue("data/tmp-{task_id}/", .x)
-    )) |>
-    select(-zip_file) |>
-    pmap(extract_data)
+tmp_file |>
+  mutate(across(
+    c(message_file, orderbook_file),
+    ~ glue("data/tmp-{task_id}/", .x)
+  )) |>
+  select(-zip_file) |>
+  pmap(extract_data)
 
-  unlink(glue("data/tmp-{task_id}/"), recursive = TRUE)
-}
+unlink(glue("data/tmp-{task_id}/"), recursive = TRUE)

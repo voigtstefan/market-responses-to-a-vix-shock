@@ -1,50 +1,48 @@
-source("_tools.R")
+library(arrow)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+source("_project-variables.R")
+source("_project-tools.R")
 
-# Read in existing files ----
-existing_files <- tibble(
-  files = dir("data/lobster_orderbook_processed", full.names = TRUE),
-  ticker = gsub(
-    ".*/lobster_orderbook_processed/(.*)_(.*)_processed.rds",
-    "\\1",
-    files
-  ),
-  date = gsub(
-    ".*/lobster_orderbook_processed/(.*)_(.*)_processed.rds",
-    "\\2",
-    files
-  )
-) |>
-  mutate(date = as.Date(date))
+if (!dir.exists("data/lobster-clean-database")) {
+  dir.create("data/lobster-clean-database", recursive = TRUE)
+  open_dataset("data/lobster-database") |>
+    group_by(ticker, year = year(date)) |>
+    write_dataset(
+      "data/lobster-clean-database",
+      partition = c("ticker", "year"),
+      format = "parquet",
+      existing_data_behavior = "delete_matching"
+    )
+}
 
-data <- existing_files |>
-  filter(ticker %in% project_tickers) |>
-  pull(files) |>
-  map_dfr(read_rds)
-
-# Remove obsolete data ----
-# Only retain periods +- 30 minutes from market open or close
-
-data <- data |>
-  filter(
-    date >= start_date,
-    date <= end_date,
-    include_in_sample
+data <- open_dataset("data/lobster-clean-database") |>
+  filter(date >= start_date, date <= end_date) |>
+  arrange(ticker, ts) |>
+  collect() |>
+  group_by(ticker) |>
+  mutate(return = 10000 * (log(midquote) - lag(log(midquote)))) |>
+  filter(include_in_sample, ) |>
+  select(-include_in_sample) |>
+  group_by(ticker, , ts = floor_date(ts, "5 minutes")) |>
+  summarise(
+    across(c(return, contains("volume"), contains("n_")), sum),
+    across(c(contains("depth"), spread), mean),
+    midquote = last(midquote),
+    .groups = "drop"
   ) |>
-  select(-include_in_sample)
+  mutate(date = as.Date(ts))
 
-# We remove manually:
-# An extremely large SPY buy order (appearing both in bid and in signed volume) in the interval 2008-04-29 13:30:00 and the following two intervals.
+# We remove manually: An extremely large SPY buy order (appearing both in bid and in signed volume)
+# in the interval 2008-04-29 13:30:00 and the following two intervals.
 # The Flash Crash period playing out strongest in the interval 2010-05-06 14:40:00 and the following ten minutes
 
 data <- data |>
   filter(
-    ts < ymd_hms("2008-04-29 13:30:00") | ts > ymd_hms("2008-04-29 13:40:00")
-  ) |>
-  filter(
+    ts < ymd_hms("2008-04-29 13:30:00") | ts > ymd_hms("2008-04-29 13:40:00"),
     ts < ymd_hms("2010-05-06 14:40:00") | ts > ymd_hms("2010-05-06 14:50:00")
   )
-
-# Compute rolling median midquotes (12 months) ----
 
 data <- data |>
   group_by(ticker) |>
@@ -57,7 +55,8 @@ data <- data |>
       .before = ~ . %m-% months(12),
       .complete = FALSE
     )
-  )
+  ) |>
+  ungroup()
 
 # Prepare variables ----
 sample <- data |>
@@ -72,28 +71,18 @@ sample <- data |>
   ) |>
   select(-median_midquote, -contains("bid"), -contains("ask"))
 
-N <- sample |>
-  count(ticker) |>
-  nrow() # Number of ticker
 
-# Only retain full sample with all N observations ----
 sample <- sample |>
   drop_na(return, signed_volume, depth, trading_volume, spread) |>
   group_by(ts) |>
-  filter(n() == N) |>
+  filter(n() == length(project_tickers)) |>
   ungroup()
 
-# Store for further computation ----
-write_rds(
-  sample,
-  "output/orderbook_sample.rds"
-)
+sample |> write_parquet("output/orderbook_sample.parquet")
 
-# Evaluate sample ----
-sample <- read_rds("output/orderbook_sample.rds")
+sample <- read_parquet("output/orderbook_sample.parquet")
 
-# Summary plot with annualized Boxplots ----
-p <- sample |>
+plot_sample <- sample |>
   transform_ticker_to_names() |>
   select(
     ts,
@@ -110,32 +99,55 @@ p <- sample |>
   mutate(group = paste0(name, " (", ticker, ")")) |>
   left_join(df_names |> select(-group), by = c("group" = "plain_group")) |>
   mutate(
-    group = gsub("Corporate Bonds", "Corp. Bonds", group),
-    group = gsub("Government Bonds", "Gov. Bonds", group),
-    group = gsub("Amihud Measure", "Amihud", group),
-    group = gsub("Initiator Net Volume", "Init. Net Vol.", group),
-    group = gsub("Client Net Volume", "Client. Net Vol.", group),
-    group = gsub("Bid-ask Spread", "Spread", group)
-  ) |>
-  mutate(group = fct_reorder(group, order)) |>
-  ggplot(aes(ts, value)) +
-  geom_boxplot(aes(group = ts), outlier.alpha = 0.1) +
+    group = str_replace_all(
+      group,
+      c(
+        "Government Bonds" = "Gov. Bonds",
+        "Amihud Measure" = "Amihud",
+        "Initiator Net Volume" = "Init. Net Vol."
+      )
+    ),
+    group = fct_reorder(group, order)
+  )
+
+y_labels <- c("mUSD", "bp", "mUSD", "bp", "mUSD", "ILLIQ")
+
+label_df <- plot_sample |>
+  group_by(ticker, group) |>
+  summarise(y_mid = mean(range(value), na.rm = TRUE)) |>
+  mutate(y_mid = replace_na(y_mid, 100)) |>
+  ungroup() |>
+  mutate(y_label = y_labels[seq_along(group)])
+
+plot_sample |>
+  ggplot(aes(x = ts, y = value, group = ts)) +
+  geom_boxplot(outlier.alpha = 0.1) +
   facet_wrap(~group, ncol = length(project_tickers), scales = "free_y") +
-  theme(
-    legend.position = "bottom",
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  ) +
   scale_x_date(
     expand = c(0, 0),
     date_breaks = "1 year",
     labels = scales::date_format("%y")
   ) +
-  labs(
-    x = "",
-    y = "ILLIQ        mUSD      bp       mUSD        bp        mUSD\n"
+  coord_cartesian(clip = "off") +
+  geom_hline(aes(yintercept = 0), linetype = "dotted") +
+  geom_text(
+    data = label_df,
+    aes(x = -Inf, y = y_mid, label = y_label),
+    inherit.aes = FALSE,
+    angle = 90,
+    vjust = -3,
+    hjust = 0,
+    size = 5
   ) +
-  geom_hline(aes(yintercept = 0), linetype = "dotted")
+  labs(x = NULL) +
+  theme(
+    axis.title.y = element_blank(),
+    axis.text.y.right = element_blank(),
+    axis.ticks.y.right = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.margin = margin(5, 20, 5, 50)
+  )
 
 ggsave(
   p +
@@ -155,12 +167,11 @@ ggsave(
 tab <- sample |>
   transform_ticker_to_names() |>
   mutate(
-    trade_ratio = n_trades / n_messages,
-    avg_trade_size = avg_trade_size / 100000
+    trade_ratio = n_trades / n_messages
   ) |>
-  select(-midquote, -n_trades, -n_messages) |>
+  select(-date, -midquote, -n_trades, -n_messages) |>
   pivot_longer(
-    signed_volume:last_col(),
+    return:last_col(),
     names_to = "variable",
     values_to = "value"
   ) |>
@@ -179,12 +190,11 @@ tab <- sample |>
 tab_total <- sample |>
   transform_ticker_to_names() |>
   mutate(
-    trade_ratio = n_trades / n_messages,
-    avg_trade_size = avg_trade_size / 100000
+    trade_ratio = n_trades / n_messages
   ) |>
-  select(-midquote, -n_trades, -n_messages) |>
+  select(-date, -midquote, -n_trades, -n_messages) |>
   pivot_longer(
-    signed_volume:last_col(),
+    return:last_col(),
     names_to = "variable",
     values_to = "value"
   ) |>

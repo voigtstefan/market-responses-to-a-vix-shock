@@ -1,17 +1,17 @@
 # ggplot2 default theme
 
-theme_set(
-  theme_minimal(base_size = 8) +
-    theme(
-      axis.text.x = element_text(size = 15),
-      axis.text.y = element_text(size = 12),
-      axis.title = element_text(size = 20),
-      strip.text = element_text(size = 14),
-      legend.text = element_text(size = 12),
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
+ggplot2::theme_set(
+  ggplot2::theme_minimal(base_size = 8) +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(size = 15),
+      axis.text.y = ggplot2::element_text(size = 12),
+      axis.title = ggplot2::element_text(size = 20),
+      strip.text = ggplot2::element_text(size = 14),
+      legend.text = ggplot2::element_text(size = 12),
+      panel.grid.major = ggplot2::element_blank(),
+      panel.grid.minor = ggplot2::element_blank(),
       legend.position = "bottom",
-      panel.grid.major.y = element_line(linewidth = .1, color = "gray")
+      panel.grid.major.y = ggplot2::element_line(linewidth = .1, color = "gray")
     )
 )
 
@@ -150,7 +150,7 @@ compute_irf <- function(
     B <- lm_fit |> broom::tidy()
     B <- B |>
       filter(grepl("XX_lag_0", term)) |>
-      mutate(term = str_replace(term, "XX_lag_0.", "")) |>
+      mutate(term = stringr::str_replace(term, "XX_lag_0.", "")) |>
       select(estimate) |>
       as.matrix()
 
@@ -177,9 +177,9 @@ compute_irf <- function(
       c = tmp_c,
       Sigma_beta = tmp_Sigma_beta,
       Sigma_c = tmp_Sigma_c,
-      ir = map_dbl(beta, ~ t(.) %*% as.vector(asymptotic_d$d)),
-      cir = map_dbl(c, ~ t(.) %*% as.vector(asymptotic_d$d)),
-      ir_se = pmap_dbl(
+      ir = purrr::map_dbl(beta, ~ t(.) %*% as.vector(asymptotic_d$d)),
+      cir = purrr::map_dbl(c, ~ t(.) %*% as.vector(asymptotic_d$d)),
+      ir_se = purrr::pmap_dbl(
         list(beta, Sigma_beta, ir),
         function(beta, Sigma_beta, irf) {
           V <- t(asymptotic_d$e_j) %x%
@@ -194,18 +194,21 @@ compute_irf <- function(
           return(sqrt(val / (asymptotic_d$T)))
         }
       ),
-      cir_se = pmap_dbl(list(c, Sigma_c, cir), function(beta, Sigma_beta, irf) {
-        V <- t(asymptotic_d$e_j) %x%
-          t(beta) -
-          irf /
-            (2 * sqrt(asymptotic_d$sigma_j)) *
-            (t(asymptotic_d$e_j) %x% t(asymptotic_d$e_j))
-        val <- t(as.vector(asymptotic_d$d)) %*%
-          Sigma_beta %*%
-          as.vector(asymptotic_d$d) +
-          1 / (asymptotic_d$sigma_j) * V %*% asymptotic_d$Sigma_se %*% t(V)
-        return(sqrt(val / (asymptotic_d$T)))
-      }),
+      cir_se = purrr::pmap_dbl(
+        list(c, Sigma_c, cir),
+        function(beta, Sigma_beta, irf) {
+          V <- t(asymptotic_d$e_j) %x%
+            t(beta) -
+            irf /
+              (2 * sqrt(asymptotic_d$sigma_j)) *
+              (t(asymptotic_d$e_j) %x% t(asymptotic_d$e_j))
+          val <- t(as.vector(asymptotic_d$d)) %*%
+            Sigma_beta %*%
+            as.vector(asymptotic_d$d) +
+            1 / (asymptotic_d$sigma_j) * V %*% asymptotic_d$Sigma_se %*% t(V)
+          return(sqrt(val / (asymptotic_d$T)))
+        }
+      ),
       lower = ir - 1.96 * ir_se,
       upper = ir + 1.96 * ir_se,
       cir_lower = cir - 1.96 * cir_se,
@@ -216,12 +219,11 @@ compute_irf <- function(
   return(irf)
 }
 
-# Research project helper functions -----
 scale_variables <- function(x) {
   (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
 }
 
-# Boxplot adjustment:
+# Boxplot adjustment ----
 original.function <- environment(ggplot2::StatBoxplot$compute_group)$f
 new.function <- function(data, scales, width = NULL, na.rm = TRUE, coef = 1.5) {
   qs <- c(0.1, 0.2, 0.5, 0.8, 0.9)
@@ -237,10 +239,6 @@ new.function <- function(data, scales, width = NULL, na.rm = TRUE, coef = 1.5) {
     data$y >
       (stats[4] +
         coef * iqr)
-  # if (any(outliers)) {
-  #  stats[c(1, 5)] <- range(c(stats[2:4], data$y[!outliers]),
-  #                          na.rm = TRUE)
-  # }
   if (length(unique(data$x)) > 1) {
     width <- diff(range(data$x)) * 0.9
   }
@@ -252,8 +250,6 @@ new.function <- function(data, scales, width = NULL, na.rm = TRUE, coef = 1.5) {
   } else {
     n <- sum(data$weight[!is.na(data$y) & !is.na(data$weight)])
   }
-  # df$notchupper <- df$middle + 1.58 * iqr/sqrt(n)
-  # df$notchlower <- df$middle - 1.58 * iqr/sqrt(n)
   df$notchupper <- df$ymax
   df$notchlower <- df$ymin
   df$x <- if (is.factor(data$x)) {

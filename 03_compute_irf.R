@@ -1,9 +1,9 @@
-source("_tools.R")
+library(arrow)
+library(dplyr)
+library(tidyr)
+source("_project-tools.R")
 
-# Read in and prepare sample ----
-full_sample <- read_rds("output/orderbook_sample.rds")
-full_sample <- full_sample |>
-  filter(ticker %in% project_tickers) |>
+full_sample <- read_parquet("output/orderbook_sample.parquet") |>
   select(
     ts,
     ticker,
@@ -13,9 +13,7 @@ full_sample <- full_sample |>
     return,
     spread,
     amihud
-  )
-
-full_sample <- full_sample |>
+  ) |>
   pivot_wider(
     names_from = ticker,
     values_from = signed_volume:last_col(),
@@ -23,8 +21,9 @@ full_sample <- full_sample |>
   ) |>
   drop_na()
 
-# Merge with Variance risk premium data ----
-vix_decomposition <- read_rds("data/pitrading/variance_risk_premium.rds") |>
+vix_decomposition <- read_parquet(
+  "data/pitrading/variance_risk_premium.parquet"
+) |>
   select(ts, iv, erv, vrp)
 
 full_sample <- full_sample |>
@@ -47,16 +46,13 @@ eval_grid <- expand_grid(
 ) |>
   filter(!(standardize == TRUE & period != "full")) # standardize just for full sample
 
-n <- as.integer(Sys.getenv("SGE_TASK_ID"))
-n <- if_else(is.na(n), as.integer(1), as.integer(n))
+n <- as.integer(Sys.getenv("SGE_TASK_ID", "1"))
 
 fixed_shock <- eval_grid$fixed_shock[n]
 standardize <- eval_grid$standardize[n]
 period <- eval_grid$period[n]
 shocked_variable <- eval_grid$shocked_variable[n]
 i <- eval_grid$i[n]
-
-# Sample preparation ----
 
 cat(shocked_variable, period, standardize, fixed_shock, i, "\n")
 
@@ -89,8 +85,6 @@ if (shocked_variable == "iv") {
   sample <- sample |> select(-iv)
 }
 
-# Choosing the shock: Generalized impulse response function based on VAR ----
-
 # Automatic lag selection for entire system
 lag_selection <- vars::VARselect(
   sample |> select(-ts) |> as.matrix(),
@@ -105,11 +99,7 @@ asymptotic_d <- asymptotic_distribution_of_shock(
   p = lags
 )
 
-# Estimate the impulse response function ----
-
-irf <- compute_irf(sample, asymptotic_d, i = i, leads = 12, p = lags)
-
-irf <- irf |>
+irf <- compute_irf(sample, asymptotic_d, i = i, leads = 12, p = lags) |>
   mutate(
     period = period,
     shocked_variable = shocked_variable,
@@ -117,36 +107,11 @@ irf <- irf |>
     standardize = standardize
   )
 
-# Store results ----
+file <- glue::glue(
+  "output/irf_estimation/irf_estimates_{period}_{shocked_variable}_{fixed_shock}_{names(sample)[-1][i]}.parquet"
+)
 if (standardize) {
-  write_rds(
-    irf,
-    file = paste0(
-      "output/irf_estimation/irf_estimates_standardized_",
-      period,
-      "_",
-      shocked_variable,
-      "_",
-      fixed_shock,
-      "_",
-      names(sample)[-1][i],
-      ".rds"
-    )
-  )
+  file <- str_replace(file, "irf_estimates_", "irf_estimates_standardized_")
 }
-if (!standardize) {
-  write_rds(
-    irf,
-    file = paste0(
-      "output/irf_estimation/irf_estimates_",
-      period,
-      "_",
-      shocked_variable,
-      "_",
-      fixed_shock,
-      "_",
-      names(sample)[-1][i],
-      ".rds"
-    )
-  )
-}
+
+write_parquet(irf, file)

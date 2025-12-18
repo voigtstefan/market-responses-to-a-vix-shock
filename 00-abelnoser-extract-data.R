@@ -45,8 +45,7 @@ raw_data <- raw_data |>
   mutate(transaction_id = 1:n()) |>
   select(transaction_id, everything())
 
-# Compute summary statistics -----
-tab <- raw_data |>
+summary_table <- raw_data |>
   group_by(ticker) |>
   summarise(
     "#Orders" = n(),
@@ -62,7 +61,7 @@ tab <- raw_data |>
   arrange(ticker) |>
   transform_ticker_to_names()
 
-tab |>
+summary_table |>
   rename(` ` = ticker) |>
   kableExtra::kable(
     booktabs = TRUE,
@@ -72,13 +71,7 @@ tab |>
   kableExtra::kable_styling(latex_options = "scale_down") |>
   cat(file = "output/summary_stats_abel_noser.tex")
 
-# Create client flow variables ----
-
-sample <- read_rds("output/orderbook_sample.rds")
-
-# Compute aggregate client net volume ----
-
-sample <- sample |>
+sample <- read_rds("output/orderbook_sample.rds") |>
   filter(
     ts >= min(raw_data$placement_date),
     ts <= max(raw_data$last_trade_date)
@@ -86,7 +79,10 @@ sample <- sample |>
   left_join(
     raw_data |>
       group_by(ticker, ts = placement_date) |>
-      summarise(client_net_volume = sum(net_volume_per_minute)),
+      summarise(
+        client_net_volume = sum(net_volume_per_minute),
+        .groups = "drop"
+      ),
     by = c("ts", "ticker")
   ) |>
   mutate(
@@ -105,4 +101,4 @@ sample <- sample |>
   )
 
 sample |>
-  write_parquet("data/AbelNoser/abel_noser_processed.parquet")
+  write_parquet("data/abel-noser/abel_noser_processed.parquet")

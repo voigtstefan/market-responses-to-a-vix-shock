@@ -104,28 +104,23 @@ compute_irf <- function(
     ncol = ncol(sample) - 1
   )
 
-  # Create model matrix
-  lag_names <- paste(
-    "X_lag",
-    formatC(0:p, width = nchar(p), flag = "0"),
-    sep = "_"
-  )
+  lags <- 0:p
   lag_functions <- setNames(
-    paste("dplyr::lag(., ", 0:p, ")"),
-    lag_names
+    lapply(lags, function(n) function(x) dplyr::lag(x, n)),
+    paste0("X_lag_", lags)
   )
 
   full_model_matrix <- sample |>
     pivot_longer(-ts) |>
     group_by(name, date = as.Date(ts)) |>
-    mutate_at(vars(value), funs_(lag_functions)) |>
+    mutate(across(value, lag_functions, .names = "{.fn}")) |>
     ungroup() |>
     select(-value) |>
     filter(!is.na(ts)) |>
     select(-date) |>
     pivot_wider(
       names_from = name,
-      values_from = lag_names[1]:last_col(),
+      values_from = contains("X_lag"),
       names_sep = "."
     )
 
@@ -223,43 +218,79 @@ scale_variables <- function(x) {
   (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
 }
 
-# Boxplot adjustment ----
-original.function <- environment(ggplot2::StatBoxplot$compute_group)$f
-new.function <- function(data, scales, width = NULL, na.rm = TRUE, coef = 1.5) {
-  qs <- c(0.1, 0.2, 0.5, 0.8, 0.9)
-  if (!is.null(data$weight)) {
-    mod <- quantreg::rq(y ~ 1, weights = weight, data = data, tau = qs)
-    stats <- as.numeric(stats::coef(mod))
-  } else {
-    stats <- as.numeric(stats::quantile(data$y, qs))
-  }
-  names(stats) <- c("ymin", "lower", "middle", "upper", "ymax")
-  iqr <- diff(stats[c(2, 4)])
-  outliers <- data$y < (stats[2] - coef * iqr) |
-    data$y >
-      (stats[4] +
-        coef * iqr)
-  if (length(unique(data$x)) > 1) {
-    width <- diff(range(data$x)) * 0.9
-  }
-  df <- as.data.frame(as.list(stats))
-  # df$outliers <- list(data$y[outliers])
-  df$outliers <- list(data$y[FALSE])
-  if (is.null(data$weight)) {
-    n <- sum(!is.na(data$y))
-  } else {
-    n <- sum(data$weight[!is.na(data$y) & !is.na(data$weight)])
-  }
-  df$notchupper <- df$ymax
-  df$notchlower <- df$ymin
-  df$x <- if (is.factor(data$x)) {
-    data$x[1]
-  } else {
-    mean(range(data$x))
-  }
-  df$width <- width
-  df$relvarwidth <- sqrt(n)
-  df
-}
+evaluate_task <- function(
+  task_id,
+  eval_grid,
+  full_sample,
+  output_folder = "output/irf_estimation"
+) {
+  fixed_shock <- eval_grid$fixed_shock[task_id]
+  standardize <- eval_grid$standardize[task_id]
+  period <- eval_grid$period[task_id]
+  shocked_variable <- eval_grid$shocked_variable[task_id]
+  i <- eval_grid$i[task_id]
 
-environment(StatBoxplot$compute_group)$f <- new.function
+  start_date <- dplyr::case_when(
+    period == "full" ~ "2000-09-01",
+    period == "GFC" ~ "2008-09-01",
+    period == "Between" ~ "2009-09-02",
+    period == "COVID-19" ~ "2020-02-16"
+  )
+  end_date <- dplyr::case_when(
+    period == "full" ~ "2030-09-01",
+    period == "GFC" ~ "2009-09-01",
+    period == "Between" ~ "2020-02-15",
+    period == "COVID-19" ~ "2021-02-16"
+  )
+
+  sample <- full_sample |>
+    filter(
+      ts >= start_date,
+      ts <= end_date
+    )
+
+  if (standardize) {
+    sample <- sample |> dplyr::mutate(across(c(-ts), scale_variables))
+  }
+
+  if (shocked_variable == "iv") {
+    sample <- sample |> dplyr::select(-erv, -vrp)
+  } else if (shocked_variable %in% c("erv", "vrp")) {
+    sample <- sample |> dplyr::select(-iv)
+  }
+
+  # Automatic lag selection for entire system
+  lag_selection <- vars::VARselect(
+    sample |> select(-ts) |> as.matrix(),
+    type = "none",
+    lag.max = 4
+  )
+  lags <- lag_selection$selection[1]
+
+  asymptotic_d <- asymptotic_distribution_of_shock(
+    sample,
+    shocked_variable,
+    p = lags
+  )
+
+  irf <- compute_irf(sample, asymptotic_d, i = i, leads = 12, p = lags) |>
+    dplyr::mutate(
+      period = period,
+      shocked_variable = shocked_variable,
+      fixed_shock = fixed_shock,
+      standardize = standardize
+    )
+
+  file <- glue::glue(
+    "{output_folder}/irf_estimates_{period}_{shocked_variable}_{fixed_shock}_{names(sample)[-1][i]}.parquet"
+  )
+  if (standardize) {
+    file <- stringr::str_replace(
+      file,
+      "irf_estimates_",
+      "irf_estimates_standardized_"
+    )
+  }
+
+  arrow::write_parquet(irf, file)
+}

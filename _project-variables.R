@@ -17,6 +17,8 @@ number_of_levels <- 50
 start_date <- as.Date("2007-07-01")
 end_date <- as.Date("2025-10-30")
 
+y_labels <- c("mUSD", "bp", "mUSD", "bp", "mUSD", "ILLIQ")
+
 transform_ticker_to_names <- function(data) {
   data |>
     dplyr::mutate(
@@ -56,6 +58,14 @@ df_names <- dplyr::tibble(
 ) |>
   dplyr::mutate(
     plain_group = stringr::str_replace(group, "cum. ", ""),
+    abbreviation = stringr::str_replace_all(
+      plain_group,
+      c(
+        "Government Bonds" = "Gov. Bonds",
+        "Amihud Measure" = "Amihud",
+        "Initiator Net Volume" = "Init. Net Vol."
+      )
+    ),
     order = 1:dplyr::n()
   )
 

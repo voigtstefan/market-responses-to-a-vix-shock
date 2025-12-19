@@ -71,7 +71,7 @@ summary_table |>
   kableExtra::kable_styling(latex_options = "scale_down") |>
   cat(file = "output/summary_stats_abel_noser.tex")
 
-sample <- read_rds("output/orderbook_sample.rds") |>
+sample <- read_parquet("output/orderbook_sample.parquet") |>
   filter(
     ts >= min(raw_data$placement_date),
     ts <= max(raw_data$last_trade_date)
@@ -90,15 +90,19 @@ sample <- read_rds("output/orderbook_sample.rds") |>
   ) |>
   select(
     ts,
-    date,
     ticker,
     signed_volume,
     client_net_volume,
     return,
     trading_volume,
     spread,
+    amihud,
     depth
-  )
-
-sample |>
+  ) |>
+  pivot_wider(
+    names_from = ticker,
+    values_from = signed_volume:last_col(),
+    names_sep = "."
+  ) |>
+  drop_na() |>
   write_parquet("data/abel-noser/abel_noser_processed.parquet")

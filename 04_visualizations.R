@@ -1,6 +1,13 @@
-source("_tools.R")
+library(arrow)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(purrr)
+library(forcats)
 
-signature_plot <- function(p, y_axis_label = standard_y_axis_label) {
+source("_project-variables.R")
+
+signature_plot <- function(p) {
   p +
     geom_bar(stat = "identity", position = position_dodge(0.5)) +
     geom_errorbar(
@@ -20,15 +27,19 @@ signature_plot <- function(p, y_axis_label = standard_y_axis_label) {
     ) +
     labs(
       x = "",
-      y = y_axis_label,
+      y = NULL,
       color = NULL,
       fill = NULL,
     )
 }
 
 # Prepare main IRF data ----
-irf_data <- dir("output/irf_estimation/", full.names = TRUE) |>
-  map_dfr(read_rds) |>
+irf_data <- list.files(
+  "output/irf_estimation/",
+  pattern = ".parquet",
+  full.names = TRUE
+) |>
+  map_dfr(read_parquet) |>
   filter(
     response != "iv",
     response != "erv",
@@ -119,7 +130,7 @@ ggsave(
 data_abel <- tibble(
   file = dir("output/irf_estimation_abel_noser/", full.names = TRUE)
 ) |>
-  mutate(data = map(file, read_rds)) |>
+  mutate(data = map(file, readr::read_rds)) |>
   unnest(data) |>
   mutate(
     Variable = shocked_variable,
@@ -154,9 +165,7 @@ p_tmp <- data_abel |>
     fill = Variable,
     order = Variable
   )) |>
-  signature_plot(
-    y_axis_label = "ILLIQ    mUSD     bp      mUSD      bp     mUSD   mUSD\n"
-  ) +
+  signature_plot() +
   project_color_manual +
   scale_fill_manual(
     values = c(
@@ -165,7 +174,6 @@ p_tmp <- data_abel |>
       "IV" = project_yellow
     )
   )
-
 
 ggsave(
   p_tmp,

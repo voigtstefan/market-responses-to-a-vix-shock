@@ -2,6 +2,8 @@ library(arrow)
 library(dplyr)
 library(tidyr)
 library(lubridate)
+library(stringr)
+library(ggplot2)
 source("_project-variables.R")
 source("_project-tools.R")
 
@@ -71,7 +73,6 @@ sample <- data |>
   ) |>
   select(-median_midquote, -contains("bid"), -contains("ask"))
 
-
 sample <- sample |>
   drop_na(return, signed_volume, depth, trading_volume, spread) |>
   group_by(ts) |>
@@ -83,45 +84,63 @@ sample |> write_parquet("output/orderbook_sample.parquet")
 sample <- read_parquet("output/orderbook_sample.parquet")
 
 plot_sample <- sample |>
-  transform_ticker_to_names() |>
   select(
     ts,
     ticker,
-    "Initiator Net Volume" = "signed_volume",
+    "Init. Net Vol." = "signed_volume",
     "Returns" = "return",
     "Bid-ask Spread" = "spread",
     "Depth" = "depth",
     "Trading Volume" = "trading_volume",
-    "Amihud Measure" = "amihud"
+    "Amihud" = "amihud"
   ) |>
-  mutate(ts = as.Date(lubridate::floor_date(ts, "year"))) |>
   pivot_longer(-c(ts, ticker)) |>
-  mutate(group = paste0(name, " (", ticker, ")")) |>
-  left_join(df_names |> select(-group), by = c("group" = "plain_group")) |>
-  mutate(
-    group = str_replace_all(
-      group,
-      c(
-        "Government Bonds" = "Gov. Bonds",
-        "Amihud Measure" = "Amihud",
-        "Initiator Net Volume" = "Init. Net Vol."
-      )
+  drop_na() |>
+  group_by(ticker, name, ts = as.Date(lubridate::floor_date(ts, "year"))) |>
+  summarise(
+    across(
+      value,
+      list(
+        ymin = ~ quantile(.x, 0.10),
+        lower = ~ quantile(.x, 0.25),
+        middle = ~ quantile(.x, 0.50),
+        upper = ~ quantile(.x, 0.75),
+        ymax = ~ quantile(.x, 0.90)
+      ),
+      .names = "{fn}"
     ),
-    group = fct_reorder(group, order)
-  )
-
-y_labels <- c("mUSD", "bp", "mUSD", "bp", "mUSD", "ILLIQ")
+    .groups = "drop"
+  ) |>
+  mutate(
+    ticker = case_when(
+      ticker == "SPY" ~ "S&P 500",
+      ticker == "TLT" ~ "Gov. Bonds"
+    ),
+    group = paste0(name, " (", ticker, ")")
+  ) |>
+  left_join(
+    df_names |> select(abbreviation, order),
+    by = c("group" = "abbreviation")
+  ) |>
+  mutate(group = fct_reorder(group, order))
 
 label_df <- plot_sample |>
   group_by(ticker, group) |>
-  summarise(y_mid = mean(range(value), na.rm = TRUE)) |>
-  mutate(y_mid = replace_na(y_mid, 100)) |>
-  ungroup() |>
+  summarise(y_mid = median(range(middle, na.rm = TRUE)), .groups = "drop") |>
+  arrange(desc(ticker)) |>
   mutate(y_label = y_labels[seq_along(group)])
 
-plot_sample |>
-  ggplot(aes(x = ts, y = value, group = ts)) +
-  geom_boxplot(outlier.alpha = 0.1) +
+plot_summaries <- ggplot(plot_sample, aes(x = ts, group = ts)) +
+  geom_boxplot(
+    aes(
+      ymin = ymin,
+      lower = lower,
+      middle = middle,
+      upper = upper,
+      ymax = ymax
+    ),
+    stat = "identity"
+  ) +
   facet_wrap(~group, ncol = length(project_tickers), scales = "free_y") +
   scale_x_date(
     expand = c(0, 0),
@@ -150,7 +169,7 @@ plot_sample |>
   )
 
 ggsave(
-  p +
+  plot_summaries +
     theme(
       axis.text.x = element_text(size = 12),
       axis.text.y = element_text(size = 12),
@@ -162,9 +181,7 @@ ggsave(
   height = 8
 )
 
-# Summary statistics table ----
-
-tab <- sample |>
+table_summary <- sample |>
   transform_ticker_to_names() |>
   mutate(
     trade_ratio = n_trades / n_messages
@@ -187,7 +204,7 @@ tab <- sample |>
 
 # Full-sample summaries
 
-tab_total <- sample |>
+table_summary_total <- sample |>
   transform_ticker_to_names() |>
   mutate(
     trade_ratio = n_trades / n_messages
@@ -209,7 +226,7 @@ tab_total <- sample |>
   pivot_wider(names_from = year, values_from = Mean)
 
 # IV summaries (IV, ERV, VRP changes in bp)
-iv_raw <- read_rds("data/pitrading/variance_risk_premium.rds") |>
+iv_raw <- read_parquet("data/pitrading/variance_risk_premium.parquet") |>
   select(ts, iv, erv, vrp) |>
   inner_join(sample |> select(ts) |> unique(), by = "ts") |>
   drop_na() |>
@@ -238,15 +255,15 @@ iv_total <- iv_raw |>
   ungroup() |>
   pivot_wider(names_from = year, values_from = Mean)
 
-tab <- tab |>
-  left_join(tab_total) |>
+table_final <- table_summary |>
+  left_join(table_summary_total) |>
   bind_rows(
     iv_year |>
       left_join(iv_total) |>
       mutate(variable = paste(str_to_upper(variable), "(changes)"))
   )
 
-tab <- tab |>
+table_final <- table_final |>
   mutate(
     variable = case_when(
       variable == "avg_trade_size" ~ "Transaction size",
@@ -266,8 +283,8 @@ tab <- tab |>
     ticker = paste0("\\rotatebox[origin=c]{90}{", ticker, "}")
   )
 
-names(tab)[1:2] <- c(" ", " ")
-kable(tab, booktabs = TRUE, digits = 3, escape = FALSE) |>
+names(table_final)[1:2] <- c(" ", " ")
+kableExtra::kable(table_final, booktabs = TRUE, digits = 3, escape = FALSE) |>
   kableExtra::kable_styling(latex_options = "scale_down") |>
   kableExtra::collapse_rows(latex_hline = "major") |>
   cat(file = "output/summary_stats.tex")

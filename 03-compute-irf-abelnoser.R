@@ -34,7 +34,7 @@ future_map(
     .x,
     eval_grid,
     full_sample,
-    output_folder = "output/irf_estimation_abel_noser"
+    output_folder = "output/irf-estimation-abel-noser"
   ),
   .progress = TRUE
 )

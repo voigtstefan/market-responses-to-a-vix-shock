@@ -284,7 +284,13 @@ table_final <- table_final |>
   )
 
 names(table_final)[1:2] <- c(" ", " ")
-kableExtra::kable(table_final, booktabs = TRUE, digits = 3, escape = FALSE) |>
+kableExtra::kable(
+  table_final,
+  format = "latex",
+  booktabs = TRUE,
+  digits = 3,
+  escape = FALSE
+) |>
   kableExtra::kable_styling(latex_options = "scale_down") |>
   kableExtra::collapse_rows(latex_hline = "major") |>
   cat(file = "output/summary_stats.tex")

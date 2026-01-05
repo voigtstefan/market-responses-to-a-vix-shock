@@ -67,7 +67,8 @@ hf_data <- open_dataset("data/lobster-clean-database") |>
 vix_decomposition <- read_parquet(
   "data/pitrading/variance_risk_premium.parquet"
 ) |>
-  select(ts, iv, erv, vrp) |>
+  select(ts, iv = iv, erv = erv, vrp = vrp) |>
+  fill() |>
   inner_join(
     central_bank_events,
     join_by(
@@ -76,13 +77,28 @@ vix_decomposition <- read_parquet(
     )
   ) |>
   mutate(time_rel = as.numeric(difftime(ts, time, units = "mins"))) |>
-  group_by(time_rel, surprise) |>
-  summarise(across(c(iv, erv, vrp), mean, na.rm = TRUE), .groups = "drop") |>
-  pivot_longer(cols = c(iv, erv, vrp))
+  pivot_longer(cols = c(iv, erv, vrp)) |>
+  group_by(time_rel, name, surprise) |>
+  summarise(
+    across(
+      value,
+      list(
+        mean = \(.x) median(.x, na.rm = TRUE),
+        q1 = \(.x) quantile(.x, 0.10, na.rm = TRUE),
+        q9 = \(.x) quantile(.x, 0.90, na.rm = TRUE)
+      )
+    ),
+    .groups = "drop"
+  )
 
 vix_decomposition |>
-  ggplot(aes(x = time_rel, y = value, color = name)) +
+  filter(name == "iv") |>
+  ggplot(aes(x = time_rel, y = value_mean, color = name)) +
   geom_line() +
+  geom_ribbon(
+    aes(ymin = value_q1, ymax = value_q9, fill = name),
+    alpha = 0.2
+  ) +
   labs(
     x = "Minutes from event",
     y = NULL,
@@ -90,23 +106,43 @@ vix_decomposition |>
     color = NULL
   ) +
   facet_wrap(~surprise) +
-  theme_minimal()
+  theme_minimal() +
+  theme(legend.position = "none")
 
 hf_data |>
-  filter(surprise) |>
-  group_by(time_rel) |>
+  select(-ts) |>
+  rename(
+    "Init. Net Vol." = "signed_volume",
+    "Returns" = "return",
+    "Bid-ask Spread" = "spread",
+    "Depth" = "depth",
+    "Trading Volume" = "trading_volume",
+    "Amihud" = "amihud"
+  ) |>
+  pivot_longer(cols = -c(surprise, time_rel)) |>
+  group_by(time_rel, surprise, name) |>
   summarise(
-    across(signed_volume:amihud, \(x) mean(x, na.rm = TRUE)),
+    across(
+      value,
+      list(
+        mean = \(.x) mean(.x, na.rm = TRUE),
+        q1 = \(.x) quantile(.x, 0.10, na.rm = TRUE),
+        q9 = \(.x) quantile(.x, 0.90, na.rm = TRUE)
+      )
+    ),
     .groups = "drop"
   ) |>
-  pivot_longer(cols = -time_rel) |>
-  ggplot(aes(x = time_rel, y = value)) +
-  facet_wrap(~name, scales = "free_y") +
+  ggplot(aes(x = time_rel, y = value_mean)) +
+  facet_wrap(name ~ surprise, scales = "free_y") +
   geom_line() +
+  geom_ribbon(
+    aes(ymin = value_q1, ymax = value_q9),
+    alpha = 0.2
+  ) +
   labs(
     x = "Minutes from event",
     y = NULL,
-    title = "Event-Study (HF Data): average value around event",
+    title = NULL,
     color = NULL
   ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +

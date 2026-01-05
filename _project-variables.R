@@ -18,6 +18,7 @@ start_date <- as.Date("2007-07-01")
 end_date <- as.Date("2025-10-30")
 
 y_labels <- c("mUSD", "bp", "mUSD", "bp", "mUSD", "ILLIQ")
+y_abel_labels <- c("mUSD", "mUSD", "bp", "mUSD", "bp", "mUSD", "ILLIQ")
 
 transform_ticker_to_names <- function(data) {
   data |>

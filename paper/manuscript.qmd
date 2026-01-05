@@ -1,0 +1,133 @@
+---
+title: Market responses to a VIX shock
+date: today
+date-format: long
+author: 
+  - name: |
+      Luis Gruber, Gregor Kastner, Stefan Voigt, and Patrick Weiss\thanks{
+        Luis Gruber is at University of Klagenfurt, e-mail: \href{mailto:luis.gruber@aau.at}{luis.gruber@aau.at}.
+        Gregor Kaster is at University of Klagenfurt, e-mail: \href{mailto:gregor.kastner@aau.at}{gregor.kastner@aau.at}.
+        Stefan Voigt is at University of Copenhagen and the Danish Finance Institute, e-mail: \href{mailto:stefan.voigt@econ.ku.dk}{stefan.voigt@econ.ku.dk}. 
+        Patrick Weiss is at Reykjavik University, e-mail: \href{mailto:patrickw@ru.is}{patrickw@ru.is}.
+      } 
+abstract: | 
+      Implied variance (VIX) shocks can be caused by either a perceived higher expected future realized variance or an increase in the variance risk premium.
+      We analyze twenty billion NASDAQ order book messages for equity and government-bond exchange-traded funds to delineate how the market responds to shocks in either of these two components. 
+      We find that investors actively sell equities and buy government bonds on largely unchanged liquidity in response to an elevated price of variance risk,e.g. due to heightened crash-risk probabilities. The response to an expected realized variance shock is active \emph{buying} of equities on worse liquidity. We speculate that this pattern might be caused by an information shock.
+thanks: | 
+      Nikolaus Hautsch, University of Vienna, Department of Statistics and Operations Research, Research Platform Data Science @ Uni Vienna, Vienna Graduate School of Finance (VGSF) and Center for Financial Studies (CFS), \href{mailto:nikolaus.hautsch@univie.ac.at}{nikolaus.hautsch@univie.ac.at}. Albert J. Menkveld, Vrije Universiteit Amsterdam, \href{mailto:albertjmenkveld@gmail.com}{albertjmenkveld@gmail.com}. Stefan Voigt, University of Copenhagen and Danish Finance Institute, \href{mailto:stefan.voigt@econ.ku.dk}{stefan.voigt@econ.ku.dk}. Stefan Voigt gratefully acknowledges support from the Danish Finance Institute (DFI). We thank participants at the Annual Meeting of the Swiss Society for Financial Market Research, the Fourteenth Annual SoFiE Conference, 5th Future of Financial Information Conference, the  15th International Conference on Computational and Financial Econometrics (CFE), Financial Intermediation Research Society (FIRS) 2022, the University of Toronto, Lancaster University Management School, VU Amsterdam, Universidad EAFIT, the Danish Finance Institute, the QFFE 2022, the Advances in Financial Econometrics Conference at CBS and the Finance \& Financial Econometrics Group at CREST. Menkveld is grateful to the Dutch Research Council (NWO) for a Vici grant. 
+keywords: Liquidity, variance risk premium, intraday dynamics, big data, exchange-traded funds.
+jel-codes: G11, G12, G20
+format:
+  pdf:
+    documentclass: article
+    papersize: a4
+    geometry:
+      - top=1.5in
+      - bottom=1.5in
+      - left=1in
+      - right=1in
+    colorlinks: true
+    fontsize: 12pt
+    linestretch: 1.5
+    number-sections: true
+    fig-cap-location: top
+    bibliography: bibliography.bib
+    cite-method: natbib
+    biblio-style: apalike  
+    lang: en
+    include-in-header:  
+     - text: |
+        \usepackage{amsmath, amsthm, amssymb}
+        \usepackage{booktabs}
+        \usepackage{tikz}
+        \usepackage{xcolor}
+        \usepackage{txfonts}
+
+        \usepackage{bbm}
+        \usepackage[colorlinks = true, urlcolor = black, linkcolor = black, citecolor = black]{hyperref}
+        \usepackage{caption, longtable, colortbl, array}
+        \captionsetup{labelfont=bf, textfont=normal, labelsep=colon}
+        \usepackage{etoolbox}
+        \makeatletter
+        \patchcmd{\maketitle}{\thispagestyle{plain}}{\thispagestyle{empty}}{}{}
+        \makeatother
+        \usepackage[bottom]{footmisc}
+        \interfootnotelinepenalty=10000
+        \usepackage[section]{placeins}
+    include-before-body:
+     - text: |
+        {\small\noindent\textbf{Keywords:} {{< meta keywords >}}\\
+         \noindent\textbf{JEL Classification:} {{< meta jel-codes >}}}
+        \clearpage
+        \setcounter{page}{1}
+execute:
+  echo: false
+  message: false
+  warning: false
+---
+
+# Introduction
+
+Investors, regulators, and the media carefully monitor the *VIX* index, often referred to as a fear gauge [@carr17]. The VIX is an estimate of the option-implied variance of the S&P 500 portfolio return. Since it is computed based on option prices it reflects the (estimated) market's risk-neutral expectation of the S&P 500's future realized variance. 
+As such, the *VIX*aggregates information about the market participant's expectation *and* valuation of future risks.
+The first component, the expected realized variance (*ERV*), predicts future return variation. 
+The second component stems from the sensitivity of risk-averse investors to extreme losses. 
+Since risk aversion elevates the risk-neutral probability of crash states,  
+the risk-neutral expectation of the realized variance typically differs from the expected realized variance. 
+The resulting wedge is commonly referred to as the variance risk premium (*VRP*).
+
+How do markets respond to an unexpected movement in the *VIX*? We argue that the nature of such a shock triggers fundamentally different responses: 
+A shock in the *VRP* indicates higher perceived crash-risk probabilities [see, e.g., @Bollerslev.2013 or @bollerslevtodorovxu15] or, more generally, an increase in the marginal investors' risk aversion [@Bekaert.2009]. 
+In response, the marginal investor may require higher compensation to hold the asset [@campbellgrossmanwang93, @Campbell.1999, @Martin.2017]. 
+A potential equilibrium induces a flight to safety by disposing of risky assets [@longstaff04, @beberbrandtkavajecz09, @Adrian.2019, @Baele.2019].
+
+A *VIX* shock may also indicate an *ERV* shock. 
+If there is news that affects a firm's cash flow streams, trading generates volatility.
+Liquidity providers as counterparties to informed trading are exposed to adverse selection. 
+As a response, a *VIX* shock due to news manifesting in higher expected realized variance may render markets illiquid [@nagel12, @drechsler.2022].
+
+In this paper, we argue that \emph{VRP} and \emph{ERV} can be subject to different shocks that govern \emph{VIX} dynamics. Market responses to a \emph{VIX} shock are therefore contingent on the nature of the shock. 
+Indeed, there is strong evidence that \emph{VRP} and \emph{ERV} impulses are not perfectly correlated.\footnote{For example, a large literature shows that central bank communication mainly impacts risk premia rather than expected realized variance \citep{Bernanke.2005, Drechsler.2018}. Such a shift in preferences can generate a time-varying wedge between \emph{ERV} and \emph{VRP} \citep{bekaerthoerova2021}.}
+
+To understand market dynamics, we follow \cite{bekaerthoerova14} and decompose high-frequency \emph{VIX} changes into two canonical components: changes in the variance risk premium and changes in expected realized variance. 
+We analyze market responses to \emph{ERV} and \emph{VRP} shocks based on an exhaustive 2007-2021 sample of \emph{all} NASDAQ trading messages for two exchange-traded funds (ETFs): SPY for the S\&P 500 equity index and TLT for government bonds. Employing a a vector autoregressive (VAR) model, we quantify the impulse responses due to shocks in either \emph{ERV} or \emph{VRP} on the (net) trading volume, midquote returns, bid-ask spreads, order book depth, and the \cite{Amihud.2002} illiquidity ratio.
+
+We show that a shift in investors' valuation of crash-risk states (the \emph{VRP} channel) triggers fundamentally different market responses than a shift in expected realized variances (\emph{ERV} channel): The most salient finding is a flight to safety in response to a \emph{VRP} shock at essentially unchanged liquidity. Prices drop for equities and increase for government bonds. These price responses revert partially in the subsequent hour despite the continued selling of equities and buying of bonds. 
+In contrast, in response to an \emph{ERV} shock, we observe a decline in liquidity and \emph{net buying} of the risky asset.
+The fragility in liquidity is reflected by a sizeable jump in the \cite{Amihud.2002} illiquidity ratio. 
+
+Our empirical findings are robust across several dimensions: 
+The results are not driven by estimation error in \emph{ERV}, which potentially is absorbed by \emph{VRP}: The responses remain consistent even if we impose perfect foresight such that the investor knows the future realized variance already ex-ante the shock.  
+In fact, the responses increase in magnitude during periods of general market turmoil, that is, when we restrict our sample to the global financial crisis and the 2020 COVID-19 outbreak. 
+Our results are also consistent with trading patterns of institutional trading:  
+For 2009 through 2013, we use standard Abel Noser data on institutional order flow to redo the impulse-response analysis. 
+We find statistically significant institutional selling of equities on \emph{VRP} shocks and significant institutional \emph{buying} on \emph{ERV} shocks. 
+
+Finally, the net buying of the S\&P~500 in response to an \emph{ERV} shock is not an indication of a flight-to-US due to a simultaneous disposal of global equity holdings: The responses are consistent for other risky assets such as a well-diversified global equity portfolio as well as ETFs tracking baskets of corporate bonds.  
+The nature of the shock to \emph{VIX} seems to matter empirically since the response to \emph{VRP} shocks differs from the response to \emph{ERV} shocks.  
+
+Intuition for these empirical patterns are gained in the context of an information asymmetry model of liquidity \citep[e.g., ][]{grossmanstiglitz80}: Investors who suddenly become more risk averse become active liquidity demanders and re-allocate risk to those who stay equally risk averse.  These resulting liquidity demanders  actively sell equities and buy government bonds.  Equity prices drop since the average investor becomes more risk-averse.  This type of shock does not affect liquidity because information asymmetry is unaffected.  
+
+The intuition for the risk (\emph{ERV}) channel is as follows. The net buying of equities by liquidity demanders might be due to the uninformed market participants experiencing additional risk for the simple reason that they are \emph{uninformed}.  They understand that there is news, and they realize that others have access to it.  They, therefore, prefer to reduce their equity holdings.  The (informed) liquidity demanders observe the news and, therefore, bear less posterior risk.  They sell on bad news, they buy on good news, but asymmetrically so, because, \emph{on average}, they must be buyers in equilibrium.  The reason is that the risk shock increases the wedge between the risk that the informed experience relative to the risk that the uninformed experience.  In this case, however, liquidity \emph{is} affected.  It worsens due to an increased information asymmetry between liquidity demanders and liquidity suppliers.  
+
+In summary, we find evidence for \emph{VIX} shocks causing flight to safety and market fragility, but due to separate channels. 
+Shocks to the variance risk premium (\emph{VRP}) trigger active re-allocation from equities to government bonds, without impairing market liquidity. 
+Shocks to the expected realized variance (\emph{ERV}), do not trigger active re-allocation but impair market liquidity, at least contemporaneously. 
+A -- on the first sight -- surprising (but rationalized) finding is the \emph{active buying} of equities that accompanies this market fragility.  
+
+Our results have (at least) two relevant implications: First, after the global financial crisis, central banks are concerned about market liquidity as part of their focus on liquidity risk management  \citep{bis.2010}.\footnote{The SEC worries about the ramifications of liquidity spirals as evidenced by their 2016 rule that requires each registered open-end management investment company, including open-end exchange-traded funds (ETFs), to establish a liquidity risk management program \citep{sec16}. European regulators share the worry but stopped short of imposing regulation \citep{esma19}.} Our findings show that liquidity management is particularly sensitive to shocks in \emph{ERV}. 
+
+Second, a growing literature focuses on the effect of central bank communication on financial markets.
+Existing work indicates that central bank announcements affect mainly \emph{VRP} instead of \emph{ERV}, i.e.,  central bank communication changes investors' perception of crash risk probabilities rather than the expected realized variance. 
+Our results indicate that such a focus tends to keep markets stable in the sense that liquidity is not directly affected.
+
+Our findings add to a rapidly growing asset-pricing literature on the role of volatility. \cite{Ait.2021} motivate their model by quoting a New York Fed President who in 2017 wondered: ``You would think if uncertainty was high, you'd have a bit more volatility.''  In their paper, they rationalize asset-price dynamics by introducing two disconnected stochastic processes: One that drives (realized) volatility and another that drives risk (aversion). Models in the same spirit are \cite{Liu.2004}, \cite{Drechsler.2013}, and \cite{Brenner.2018}. Our results complements this literature by identifying the different natures of the two fundamental channels of VIX shocks.  
+
+The manuscript is organized as follows.  Section~\ref{sec:example} develops intuition for what drives changes in \emph{VIX}, in \emph{ERV}, and in the wedge between them, which corresponds to \emph{VRP}.  We provide a simple framework starting from the generic stochastic pricing kernel representation and show that crash risk probabilities, governed by more negative return skewness and an increase in the risk aversion lead to an increase of \emph{VRP}, while an increase of \emph{ERV} leads to ambiguous results for the \emph{VRP}. 
+Section~\ref{sec:data} presents the intraday \emph{VIX} decomposition and the order book data. 
+Section~\ref{sec:methodology} discusses the estimation of impulse-response functions, along with appropriate confidence intervals. 
+Section~\ref{sec:results} presents the main empirical findings: Market responses to \emph{VIX} (component) impulses.  Section~\ref{sec:conclusion} concludes.
+
+# The wedge between expected realized variance under $\mathbbm{P}$ and $\mathbbm{Q}$ \label{sec:example}
+

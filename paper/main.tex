@@ -1,0 +1,618 @@
+\documentclass[12pt, letterpaper]{article}
+\usepackage[pass, left=1in, right=1in, top=1in, bottom=1in]{geometry}
+
+\usepackage{setspace}
+\def\doublespacing{\setstretch{2}}
+
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage{xcolor}
+
+\usepackage{txfonts}
+\usepackage{pdflscape}
+
+\usepackage{multirow}
+
+\usepackage[colorlinks = true, 
+urlcolor = black, 
+linkcolor = black, 
+citecolor = black]{hyperref}
+
+\usepackage{bm}
+\usepackage{bbm}
+\usepackage{float}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{ltxtable}
+\usepackage{placeins}
+
+\usepackage[labelfont={bf}, font = {scriptsize}, textfont={scriptsize}, justification=raggedright]{caption}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+
+\usepackage[round]{natbib}
+\bibliographystyle{chicago}
+
+\newcommand{\ourtitle}{Market responses to a VIX shock}
+\newcommand{\ourabstract}{%
+    \noindent 
+Implied variance (VIX) shocks can be caused by either a perceived higher expected future realized variance or an increase in the variance risk premium.
+We analyze twenty billion NASDAQ order book messages for equity and government-bond exchange-traded funds to delineate how the market responds to shocks in either of these two components. 
+We find that investors actively sell equities and buy government bonds on largely unchanged liquidity in response to an elevated price of variance risk,e.g. due to heightened crash-risk probabilities. The response to an expected realized variance shock is active \emph{buying} of equities on worse liquidity. We speculate that this pattern might be caused by an information shock.
+\vspace{1em}}
+
+\title{\ourtitle{\thanks{Nikolaus Hautsch, University of Vienna, Department of Statistics and Operations Research, Research Platform Data Science @ Uni Vienna, Vienna Graduate School of Finance (VGSF) and Center for Financial Studies (CFS), \href{mailto:nikolaus.hautsch@univie.ac.at}{nikolaus.hautsch@univie.ac.at}. Albert J. Menkveld, Vrije Universiteit Amsterdam, \href{mailto:albertjmenkveld@gmail.com}{albertjmenkveld@gmail.com}. Stefan Voigt, University of Copenhagen and Danish Finance Institute, \href{mailto:stefan.voigt@econ.ku.dk}{stefan.voigt@econ.ku.dk}. Stefan Voigt gratefully acknowledges support from the Danish Finance Institute (DFI). We thank participants at the Annual Meeting of the Swiss Society for Financial Market Research, the Fourteenth Annual SoFiE Conference, 5th Future of Financial Information Conference, the  15th International Conference on Computational and Financial Econometrics (CFE), Financial Intermediation Research Society (FIRS) 2022, the University of Toronto, Lancaster University Management School, VU Amsterdam, Universidad EAFIT, the Danish Finance Institute, the QFFE 2022, the Advances in Financial Econometrics Conference at CBS and the Finance \& Financial Econometrics Group at CREST. Menkveld is grateful to the Dutch Research Council (NWO) for a Vici grant. }
+}}
+\author{
+    \begin{tabular}{ccc}
+		Nikolaus Hautsch  & Albert J. Menkveld & Stefan Voigt   %
+	\end{tabular}
+}
+
+
+\begin{document}
+	\hypersetup{pageanchor=false}
+    \clearpage\maketitle
+    \thispagestyle{empty}
+
+\renewcommand{\abstractname}{ }
+	\begin{abstract}
+			\ourabstract{}\\
+			\noindent JEL Codes: G11, G12, G20\\
+            \noindent Keywords: Liquidity, variance risk premium, intraday dynamics, big data, exchange-traded funds.
+	\end{abstract}
+
+\newpage
+\hypersetup{pageanchor=true}
+\setcounter{page}{1}	
+\doublespacing
+
+\section{Introduction}
+
+Investors, regulators, and the media carefully monitor the \emph{VIX} index, often referred to as a fear gauge \citep{carr17}. The VIX is an estimate of the option-implied variance of the S\&P~500 portfolio return. Since it is computed based on option prices it reflects the (estimated) market's risk-neutral expectation of the S\&P~500's future realized variance. 
+As such, the \emph{VIX} aggregates information about the market participant's expectation \emph{and} valuation of future risks.
+The first component, the expected realized variance (\emph{ERV}), predicts future return variation. 
+The second component stems from the sensitivity of risk-averse investors to extreme losses. 
+Since risk aversion elevates the risk-neutral probability of crash states,  
+the risk-neutral expectation of the realized variance typically differs from the expected realized variance. 
+The resulting wedge is commonly referred to as the variance risk premium (\emph{VRP}).
+
+How do markets respond to an unexpected movement in the VIX? We argue that the nature of such a shock triggers fundamentally different responses: 
+A shock in the \emph{VRP} indicates higher perceived crash-risk probabilities (see, e.g., \cite{Bollerslev.2013} or \cite{bollerslevtodorovxu15}) or, more generally, an increase in the marginal investors' risk aversion \citep{Bekaert.2009}. 
+In response, the marginal investor may require higher compensation to hold the asset \citep{campbellgrossmanwang93, Campbell.1999, Martin.2017}. 
+A potential equilibrium induces a flight to safety by disposing of risky assets \citep{longstaff04, beberbrandtkavajecz09, Adrian.2019, Baele.2019}.
+
+A \emph{VIX} shock may also indicate an \emph{ERV} shock. 
+If there is news that affects a firm's cash flow streams, trading generates volatility.
+Liquidity providers as counterparties to informed trading are exposed to adverse selection. 
+As a response, a \emph{VIX} impulse due to news manifesting in higher expected realized variance may render markets illiquid \citep{nagel12, drechsler.2022}.
+
+In this paper, we argue that \emph{VRP} and \emph{ERV} can be subject to different shocks that govern \emph{VIX} dynamics. Market responses to a \emph{VIX} shock are therefore contingent on the nature of the shock. 
+Indeed, there is strong evidence that \emph{VRP} and \emph{ERV} impulses are not perfectly correlated.\footnote{For example, a large literature shows that central bank communication mainly impacts risk premia rather than expected realized variance \citep{Bernanke.2005, Drechsler.2018}. Such a shift in preferences can generate a time-varying wedge between \emph{ERV} and \emph{VRP} \citep{bekaerthoerova2021}.}
+
+To understand market dynamics, we follow \cite{bekaerthoerova14} and decompose high-frequency \emph{VIX} changes into two canonical components: changes in the variance risk premium and changes in expected realized variance. 
+We analyze market responses to \emph{ERV} and \emph{VRP} shocks based on an exhaustive 2007-2021 sample of \emph{all} NASDAQ trading messages for two exchange-traded funds (ETFs): SPY for the S\&P 500 equity index and TLT for government bonds. Employing a a vector autoregressive (VAR) model, we quantify the impulse responses due to shocks in either \emph{ERV} or \emph{VRP} on the (net) trading volume, midquote returns, bid-ask spreads, order book depth, and the \cite{Amihud.2002} illiquidity ratio.
+
+We show that a shift in investors' valuation of crash-risk states (the \emph{VRP} channel) triggers fundamentally different market responses than a shift in expected realized variances (\emph{ERV} channel): The most salient finding is a flight to safety in response to a \emph{VRP} shock at essentially unchanged liquidity. Prices drop for equities and increase for government bonds. These price responses revert partially in the subsequent hour despite the continued selling of equities and buying of bonds. 
+In contrast, in response to an \emph{ERV} shock, we observe a decline in liquidity and \emph{net buying} of the risky asset.
+The fragility in liquidity is reflected by a sizeable jump in the \cite{Amihud.2002} illiquidity ratio. 
+
+Our empirical findings are robust across several dimensions: 
+The results are not driven by estimation error in \emph{ERV}, which potentially is absorbed by \emph{VRP}: The responses remain consistent even if we impose perfect foresight such that the investor knows the future realized variance already ex-ante the shock.  
+In fact, the responses increase in magnitude during periods of general market turmoil, that is, when we restrict our sample to the global financial crisis and the 2020 COVID-19 outbreak. 
+Our results are also consistent with trading patterns of institutional trading:  
+For 2009 through 2013, we use standard Abel Noser data on institutional order flow to redo the impulse-response analysis. 
+We find statistically significant institutional selling of equities on \emph{VRP} shocks and significant institutional \emph{buying} on \emph{ERV} shocks. 
+
+Finally, the net buying of the S\&P~500 in response to an \emph{ERV} shock is not an indication of a flight-to-US due to a simultaneous disposal of global equity holdings: The responses are consistent for other risky assets such as a well-diversified global equity portfolio as well as ETFs tracking baskets of corporate bonds.  
+The nature of the shock to \emph{VIX} seems to matter empirically since the response to \emph{VRP} shocks differs from the response to \emph{ERV} shocks.  
+
+Intuition for these empirical patterns are gained in the context of an information asymmetry model of liquidity \citep[e.g., ][]{grossmanstiglitz80}: Investors who suddenly become more risk averse become active liquidity demanders and re-allocate risk to those who stay equally risk averse.  These resulting liquidity demanders  actively sell equities and buy government bonds.  Equity prices drop since the average investor becomes more risk-averse.  This type of shock does not affect liquidity because information asymmetry is unaffected.  
+
+The intuition for the risk (\emph{ERV}) channel is as follows. The net buying of equities by liquidity demanders might be due to the uninformed market participants experiencing additional risk for the simple reason that they are \emph{uninformed}.  They understand that there is news, and they realize that others have access to it.  They, therefore, prefer to reduce their equity holdings.  The (informed) liquidity demanders observe the news and, therefore, bear less posterior risk.  They sell on bad news, they buy on good news, but asymmetrically so, because, \emph{on average}, they must be buyers in equilibrium.  The reason is that the risk shock increases the wedge between the risk that the informed experience relative to the risk that the uninformed experience.  In this case, however, liquidity \emph{is} affected.  It worsens due to an increased information asymmetry between liquidity demanders and liquidity suppliers.  
+
+In summary, we find evidence for \emph{VIX} shocks causing flight to safety and market fragility, but due to separate channels. 
+Shocks to the variance risk premium (\emph{VRP}) trigger active re-allocation from equities to government bonds, without impairing market liquidity. 
+Shocks to the expected realized variance (\emph{ERV}), do not trigger active re-allocation but impair market liquidity, at least contemporaneously. 
+A -- on the first sight -- surprising (but rationalized) finding is the \emph{active buying} of equities that accompanies this market fragility.  
+
+Our results have (at least) two relevant implications: First, after the global financial crisis, central banks are concerned about market liquidity as part of their focus on liquidity risk management  \citep{bis.2010}.\footnote{The SEC worries about the ramifications of liquidity spirals as evidenced by their 2016 rule that requires each registered open-end management investment company, including open-end exchange-traded funds (ETFs), to establish a liquidity risk management program \citep{sec16}. European regulators share the worry but stopped short of imposing regulation \citep{esma19}.} Our findings show that liquidity management is particularly sensitive to shocks in \emph{ERV}. 
+
+Second, a growing literature focuses on the effect of central bank communication on financial markets.
+Existing work indicates that central bank announcements affect mainly \emph{VRP} instead of \emph{ERV}, i.e.,  central bank communication changes investors' perception of crash risk probabilities rather than the expected realized variance. 
+Our results indicate that such a focus tends to keep markets stable in the sense that liquidity is not directly affected.
+
+Our findings add to a rapidly growing asset-pricing literature on the role of volatility. \cite{Ait.2021} motivate their model by quoting a New York Fed President who in 2017 wondered: ``You would think if uncertainty was high, you'd have a bit more volatility.''  In their paper, they rationalize asset-price dynamics by introducing two disconnected stochastic processes: One that drives (realized) volatility and another that drives risk (aversion). Models in the same spirit are \cite{Liu.2004}, \cite{Drechsler.2013}, and \cite{Brenner.2018}. Our results complements this literature by identifying the different natures of the two fundamental channels of VIX shocks.  
+
+The manuscript is organized as follows.  Section~\ref{sec:example} develops intuition for what drives changes in \emph{VIX}, in \emph{ERV}, and in the wedge between them, which corresponds to \emph{VRP}.  We provide a simple framework starting from the generic stochastic pricing kernel representation and show that crash risk probabilities, governed by more negative return skewness and an increase in the risk aversion lead to an increase of \emph{VRP}, while an increase of \emph{ERV} leads to ambiguous results for the \emph{VRP}. 
+Section~\ref{sec:data} presents the intraday \emph{VIX} decomposition and the order book data. 
+Section~\ref{sec:methodology} discusses the estimation of impulse-response functions, along with appropriate confidence intervals. 
+Section~\ref{sec:results} presents the main empirical findings: Market responses to \emph{VIX} (component) impulses.  Section~\ref{sec:conclusion} concludes.
+
+\section{The wedge between expected realized variance under \texorpdfstring{$\mathbbm{P}$}{P} and \texorpdfstring{$\mathbbm{Q}$}{Q}}\label{sec:example}
+
+The VIX is an estimate of the (option-)implied variance (IV) of the S\&P~500 index return. It encodes information from option prices to back out the IV of a hypothetical option with a maturity of 30 days (typically 22 trading days). In this sense, it estimates the square root of the expected realized variance $RV_{t}^{(h)}$ of the market under the \emph{risk-neutral} measure $E_t^\mathbb{Q}\left(RV_{t}^{(h)}\right)$ from time $t$ to $t+h$ (typically $h=22$ trading days ahead). Therefore, \emph{VIX} conveys information about the markets' expectation \emph{and} valuation of future variance risks. 
+
+A change in $E_t^\mathbb{Q}\left(RV_{t}^{(h)}\right)$ can be due to variation of $E_t^\mathbb{P}\left(RV_{t}^{(h)}\right)$, the expected realized variance (\emph{ERV}) under the physical measure $\mathbb{P}$. Alternatively, a shift in rational investors' preferences and crash state assessment may have caused the shock. 
+The latter holds because risk-averse investors are sensitive to extreme loss states and are eager to counteract these exposures by buying protection. 
+The desire to cover these losses typically drives up the risk-neutral probability of crash states relative to the actual probability of occurrence. 
+As a result, the expected realized variance under the risk-neutral measure $\mathbbm{Q}$ can differ from the expected realized variance under the physical measure $\mathbbm{P}$. 
+This difference between the risk-neutral expectation of the realized return variation and the expected realized variance computed under the physical measure $\mathbbm{P}$ is typically called the variance risk premium (\emph{VRP}). Defining $IV_t^{(h)}$ as $IV_t^{(h)}=E_t^\mathbb{Q}\left(RV_{t}^{(h)}\right)$, VRP is formally given by 
+\begin{align} \label{eq:variance_risk_premium}
+VRP_t^{(h)}=E_t^\mathbb{Q}\left(RV_{t}^{(h)}\right)-E_t^\mathbb{P}\left(RV_{t}^{(h)}\right)=IV_t^{(h)}-E_t^\mathbb{P}\left(RV_{t}^{(h)}\right).
+\end{align}
+
+To interpret shocks to the \emph{VIX} consider the generic stochastic pricing kernel representation $m_{t}^{(h)}$. The \emph{VRP} can be expressed as
+\begin{align}
+    \nonumber VRP_t^{(h)} &:= E_t^{\mathbbm{Q}}\left(RV_{t}^{(h)}\right) - E_t^{\mathbbm{P}}\left(RV_{t}^{(h)}\right) \\\nonumber
+        %&= E_t^{\mathbbm{P}}\left(m_{t, t^\prime}\right)^{-1}E_t^{\mathbbm{P}}\left(m_{t, t^\prime} RV_{t,t^\prime}\right) - E_t^{\mathbbm{P}}\left(RV_{t,t^\prime}\right)\\\nonumber
+        &=E_t^{\mathbbm{P}}\left(m_{t}^{(h)}\right)^{-1} \left[E_t^{\mathbbm{P}}\left(m_{t}^{(h)}RV_{t}^{(h)}\right) - E_t^{\mathbbm{P}}\left(m_{t}^{(h)}\right) E_t^{\mathbbm{P}}\left(RV_{t}^{(h)}\right)\right]\\
+        &=E_t^{\mathbbm{P}}\left(m_{t}^{(h)}\right)^{-1} \left[Cov_t^{\mathbbm{P}}\left(m_{t}^{(h)}, RV_{t}^{(h)}\right)\right].\label{eq:VRP_sdf}
+\end{align}
+Arbitrage-free markets thus imply that $E_t^{\mathbbm{Q}}\left(RV_{t}^{(h)}\right)$ is the fair strike price of a variance swap.\footnote{Following \cite{Cochrane.2009}, the fundamental equation implies that an asset with payouts $X_{t+h}$ is priced such that $P_t = E_t^\mathbb{P}\left(m_{t}^{(h)}/E_t^{\mathbbm{P}}\left(m_{t}^{(h)}\right) X_{t+h}\right)$. Set $X_{t+h} = RV_{t}^{(h)} - E^\mathbb{Q}_t\left(RV_{t}^{(h)}\right)$. Then, from the derivations above, it follows immediately that $P_t = E_t^\mathbb{P}\left(m_{t}^{(h)}/E_t^{\mathbbm{P}}\left(m_{t}^{(h)}\right)\left( RV_{t}^{(h)} - E^\mathbb{Q}_t\left(RV_{t}^{(h)}\right)\right)\right) = 0$.} 
+Equation~\eqref{eq:VRP_sdf}  also implies that if the realized variance $RV_{t}^{(h)}$ is orthogonal to the pricing kernel, i.e., because it is deterministic, investors do not require a variance risk premium. Absent a variance risk premium, any impulse to \emph{VIX} would be caused by an increase in $E_t^{\mathbbm{P}}\left(RV_{t}^{(h)}\right)$. 
+The same holds, when returns and the pricing kernel are jointly log-normally distributed, as then the variance risk premium is exactly zero \citep[see, e.g., ][]{Drechsler.2010, Bekaert.2020}.
+Conversely, if the future realized variance is a factor correlated with the discount factor, the variance risk premium may be non-zero. 
+In other words, deviations from Gaussianity of the return distribution or a non-linear stochastic discount factor are required to generate priced variance risks. 
+
+To illustrate how expected realized variance $E_t^{\mathbbm{P}}\left(RV_{t}^{(h)}\right)$ can differ from implied variance $E_t^{\mathbbm{Q}}\left(RV_{t}^{(h)}\right)$ we follow \cite{Bakshi.2006}. 
+In a particular application of their Theorem 1, \cite{Bakshi.2006} show that with power utility and coefficient of relative risk aversion $\alpha$, the variance risk premium \emph{VRP} can be approximated by \begin{align}
+    VRP_t^{(h)} \approx -\alpha E_t^{\mathbbm{P}}\left(RV_{t}^{(h)}\right)^{3/2}  \rho + \frac{\alpha^2}{2} E_t^{\mathbbm{P}}\left(RV_{t}^{(h)}\right)^2 \left(\kappa - 3\right)
+\end{align}
+where $\rho$ is the skewness of returns under $\mathbbm{P}$ and $\kappa$ is the kurtosis of the returns under the physical distribution.
+\begin{lemma}\label{lemma:vrp_intuition} For stock market returns with negative skewness ($\rho<0$) and excess kurtosis $\kappa\geq 3$ it holds that 
+\begin{align*}
+    \frac{\partial VRP_t^{(h)}}{\partial \alpha} &= - E_t^{\mathbbm{P}}\left(RV_{t}^{(h)}\right)^{3/2} \rho + \alpha E_t^{\mathbbm{P}}\left(RV_{t}^{(h)}\right)^2 \left(\kappa - 3\right) > 0,\\
+    \frac{\partial VRP_t^{(h)}}{\partial \rho} &= -\alpha E_t^{\mathbbm{P}}\left(RV_{t}^{(h)}\right)^{3/2}  < 0.
+\end{align*}
+\end{lemma}
+\noindent Negative skewness and excess kurtosis are typial properties of financial returns. In that case, Lemma~\ref{lemma:vrp_intuition} yields the following insights: First, \emph{VRP} increases with the representative investor's risk aversion $\alpha$.
+Higher marginal utility for bad outcomes (low market returns) implies a shift of probability mass on the left-tail of the risk-neutral distribution $\mathbbm{Q}$. The return distribution under the physical measure $\mathbbm{P}$ remains constant, such that the wedge between expected realized variance under $\mathbbm{P}$ and $\mathbbm{Q}$ increases. 
+In principle, one could explain a time-varying \emph{VRP} by letting the risk aversion of an agent change through time. The assumption of varying the risk aversion, however, is controversial as an agent's risk aversion is typically assumed to be part of her DNA.\footnote{As one notable exception, \cite{Wang.2020} document elevated aggregate risk aversion as a response to terror attacks. Note further, that tightening margin constraints or other constraints can also be interpreted as an increase in the risk aversion of the representative investors.}
+
+The comparative statics from Lemma~\ref{lemma:vrp_intuition} further show that one can generate different impact on \emph{ERV} and \emph{VIX} by changing the assessment of the likelihood of catastrophic risk under the physical measure $\mathbbm{P}$: 
+higher crash risks, interpreted as a more negative skewness $\rho$ of the return distribution under the physical measure $\mathbbm{P}$, increase the variance risk premium \emph{VRP}. 
+Intuitively, increasing the probability of rare (negative) events under $\mathbbm{P}$ which are "weighted" more by risk-averse investors under $\mathbbm{Q}$ has a stronger effect on the realized variance under the risk-neutral measure such that \emph{VRP} increases. 
+Hence, a change in \emph{VRP} can be caused either by an increase in risk aversion or by an increase in perceived crash probability risks. \emph{VRP} therefore captures the assessment of risks and may trigger different responses than changes in risks itself, which is captured by \emph{ERV}.  
+
+In summary, an \emph{IV} shock (indicated by a \emph{VIX} increase) reflects either a change of \emph{VRP} or \emph{ERV}. That means the implied volatility increases either due to perceived higher future realized variance \emph{or} a change in the assessment of risks by the representative investor. 
+
+Though \eqref{eq:variance_risk_premium} is a common way to define the variance risk premium, the literature also suggests alternative definitions. A seminal contribution is \cite{carrwu09} who illustrate that the average (estimated) variance risk premium corresponds to the sample average of the difference between the variance swap rate and the realized variance. % TODO: What is a variance swap rate?
+According to this definition, the variance risk premium is typically \emph{negative}, and \eqref {eq:variance_risk_premium} can be seen as the \emph{negative} variance risk premium. 
+Alternative approaches define and estimate the variance risk premium under explicit stochastic volatility models, see, e.g., \cite{bollerslevgibsonzhou11}. Concepts of variance risk premia -- though not necessarily explicitly defined -- can also be found in earlier work, see, e.g., \cite{rosenbergengle02}, among others. Finally, some literature uses an alternative terminology. 
+While we follow the terminology to call $VRP_{t}^{(h)}$ a ''variance risk premium'', \cite{bekaerthoerovaduca13, bekaerthoerova2021} associate $VRP_{t}^{(h)}$ with ''risk aversion'' (RA) and $E_t^\mathbb{P}\left(RV_{t}^{(h)}\right)$ with ''uncertainty'' (UC). Accordingly, in their notation, the definition in \eqref{eq:variance_risk_premium} reads as  $RA_{t}^{(h)}=IV_{t}^{(h)}-UC_{t}^{(h)}$ but is conceptually identical.
+
+\section{Data}\label{sec:data}
+
+\subsection{Intraday VIX decomposition}\label{sec:vix} 
+
+Our starting point to investigate how a \emph{VIX} shock ripples through the market is the CBOE Volatility Index (\emph{VIX}). The VIX is determined by the market prices of out-of-the-money puts and calls written on the S\&P~500 index with maturity of one month. It thus estimates the (scaled) implied volatility (the square root of IV), i.e., $\widehat{IV}_{t}^{(ss)} = \frac{\text{VIX}^2_{t, \tau}}{120,000}$. 
+
+\cite{bollerslevtauchenzhou09, bollerslevsizovatauchen12, bollerslevmarronexuhzou14} introduce the definition from \eqref{eq:variance_risk_premium} under the simplifying assumption that the realized variance follows a martingale process. Accordingly, in their definition, the \emph{expected} realized variance  is replaced by the (observed) \emph{ex-post} realized variance through the previous month. This assumption, however, is challenged by \cite{bekaerthoerova14} who exploit the predictability in realized variances and suggest \eqref{eq:variance_risk_premium} as the basis of a prediction model for $RV_{t}^{(h)}$.
+Our approach extends the framework of \cite{bekaerthoerova14} and \cite{bekaerthoerova2021} by predicting the realized variance not only based on daily information but also by utilizing intraday information. This makes our notation more complex, as we have to explicitly differentiate between intraday trading periods and overnight non-trading periods. We define the sequence of 5-minute time stamps $\tau \in\left\{0, \ldots, 78\right\}$, which range from 09:30~a.m.~($\tau = 0$) to 4:00~p.m.~($\tau = 78$). We label the corresponding 5-minute returns as $r_{t, \tau} = \log\left(p_{t, \tau}\right) - \log\left(p_{t, \tau - 1}\right)$ for $\tau > 0$, where $p_{t, \tau}$ is the S\&P~500 index value on day $t$ at time stamp $\tau$. With a slight abuse of notation, we define $r_{t, 0} = \log\left(p_{t, 0}\right) - \log\left(p_{t - 1, 78}\right)$ as the overnight return. 
+We denote
+\begin{equation}
+\widetilde{RV}_{t, \tau} := \sum\limits_{k = 0}^\tau r_{t, k}^2
+\end{equation}
+as the realized variance of the S\&P~500 index, computed from the closure on day $t-1$  to the end of the $\tau$-th 5-minute interval at day $t$ (i.e., including the squared overnight return). Then, $RV_{t-1}^{(1)} := \widetilde{RV}_{t, 78}$ defines the realized variance of the full trading day, measured from closure at day $t-1$  to closure on day $t$. Accordingly, we define the future realized variance, measured from the end of the $\tau$-th 5-minute interval at day $t$ to market closure $d$ trading days ahead as
+\begin{equation}
+RV_{t, \tau}^{(d)}:= \sum\limits_{k = \tau + 1}^{78} r_{t, k}^2 + \sum\limits_{h = 1}^{d} RV_{t + h-1}^{(1)} =  \sum\limits_{h = 0}^{d} RV_{t + h - 1}^{(1)} -\widetilde{RV}_{t, \tau}.
+\end{equation}
+An empirically well-established and widely used model for the prediction of future realized variances is the heterogeneous autoregressive (HAR) model introduced by \cite{Corsi.2009}. It builds on the high persistence of daily realized volatility, revealed by a slowly decaying autocorrelation function. The HAR model captures this behavior in a simple but empirically powerful way. Specifically, we model future realized variances based on averages of past realized variances, aggregated through different time horizons. A natural choice is to explain the future realized variance based on the last day's, last week's, and last month's (average) realized variance. While \cite{bekaerthoerova14} use the HAR framework based on daily data, we extend this framework to incorporate also intraday information. Accordingly, we model the log one-month-ahead realized variance, $RV_{t, \tau}^{(22)}$, measured from the end of the $\tau$-th 5-minute interval at day $t$ to market closure $22$ trading days ahead, as
+\begin{align}\label{eq:rv_regression}
+\log\left(RV_{t, \tau}^{(22)}\right) = c_\tau &+ \beta_\tau \log\left(RV_{t-22, 0}^{(21)} + \widetilde{RV}_{t, \tau}\right) + \gamma_\tau \log\left(RV_{t-5, 0}^{(4)} + \widetilde{RV}_{t, \tau}\right) \nonumber\\&+ \delta_\tau \log\left(\widetilde{RV}_{t, \tau}\right) + \varepsilon_{t, \tau},
+\end{align}
+where $\varepsilon_{t, \tau}$ is zero mean white noise and $\left(RV_{t-d, 0}^{(d-1)} + \widetilde{RV}_{t, \tau}\right)$ is the sum of the realized variance measured from market opening $d$ trading days ago until the closure on the previous day $\left(RV_{t-d, 0}^{(d-1)}\right)$ and the realized variance measured from closure on the previous day until the most recent observation on day $t$ in the intraday interval $\tau$ $\left(\widetilde{RV}_{t, \tau}\right)$. For the special case $\tau = 78$, these components collapse to $RV_{t-d, 0}^{(d-1)} + {RV}_{t-1}^{(1)} = RV_{t - d,0}^{(d)}$, corresponding to the $d$-day realized variance measured from the opening $d$ days ago until the closure on the current day. Likewise, $\widetilde{RV}_{t, 78}=RV_{t-1}^{(1)}$ collapses to the realized variance measured from the previous day's to the current day's closure. In this case, Equation~\eqref{eq:rv_regression} resembles the initial HAR model by \cite{Corsi.2009} including realized variances of the most recent day, the previous $5$ days, and the previous $22$ days and nests the daily regression setup of \cite{bekaerthoerova14}.
+
+We use this framework as a natural starting point for predicting future realized variances using information up to day $t$, timestamp $\tau$. An obvious extension is to incorporate not only lagged realized variances (and squared overnight returns), but also information from other trading variables and from other assets. In our sample, we find that expanding the relevant set of conditioning information to contemporaneous \emph{VIX} levels and limit order book data does only marginally increase the predictive performance, leaving Equation~\eqref{eq:rv_regression} as a parsimonious and powerful benchmark.
+
+Note that the regression coefficients in Equation~\eqref{eq:rv_regression} depend on the timestamp $\tau$, i.e., the predictive power of past realized variances differ depending on the intraday period. 
+Intuitively, we expect the importance of $\widetilde{RV}_{t, \tau}$ to increase as the trading day progresses. 
+In order to avoid imposing assumptions on the intraday evolution of $c_{\tau}$, $\beta_{\tau}$, $\gamma_{\tau}$, and $\delta_{\tau}$, we estimate the parameters in Equation~\eqref{eq:rv_regression} for each value of $\tau\in\left\{1,\ldots,78\right\}$, yielding $78$ individual regressions. To avoid look-ahead biases, we conduct rolling estimation windows with an estimation length of 12 months. For that purpose, we extract 5-minute S\&P~500 index values and 5-minute \emph{VIX} index levels from the data provider \emph{pitrading}. Our sample starts already in July 2006 such that we obtain estimates of the predictive regression for the entire period for which order book information is available. 
+
+Estimation of the parameters in Equation~\eqref{eq:rv_regression} for $\tau\in\left\{1,\ldots,78\right\}$ by least squares yields the sequence $\{ \hat c_{\tau}, \hat\beta_{\tau}, \hat\gamma_{\tau}, \hat\delta_{\tau} \}$ and thus 
+\begin{align}
+\widehat{E}_{t, \tau}\left(RV_{t, \tau}^{(22)}\right) &= \exp\left( \hat c_\tau + \hat\beta_\tau \log\left(RV_{t-22, 0}^{(21)} + \widetilde{RV}_{t, \tau}\right) +\right.\nonumber\\ & \left.\hat\gamma_\tau \log\left(RV_{t-5, 0}^{(4)} + \widetilde{RV}_{t, \tau}\right) + \hat\delta_\tau \log\left(\widetilde{RV}_{t, \tau}\right) \right).
+\end{align}
+Accordingly, for each day $t$ and timestamp $\tau$ we obtain the estimated $22$-days-forward variance risk premium $\widehat{VRP}_{t,\tau}^{(22)}$ as 
+\begin{align}\label{eq:risk_aversion}
+	\widehat{VRP}_{t, \tau }^{(22)} = \widehat{IV}_{t, \tau}^{(22)}-\widehat{E}_{t, \tau}\left(RV_{t, \tau}^{(22)}\right).
+\end{align}
+Figure~\ref{fig:vix_rv} illustrates the time series of the (estimated) implied variance $\widehat{IV}_{t, \tau}^{(22)}$ and the realized variance $RV_{t, \tau}^{(22)}$ for the next 22 days. Note, that in line with \cite{bollerslevtodorovxu15}, the average implied variance exceeds the average realized variance, which suggests that the unconditional mean of the variance risk premium is positive. The figure reveals two extreme periods of elevated variance risk premia during the last 14 years: the global financial crisis and the market turbulences related to the outbreak of the COVID-19 pandemic in March 2020.  
+\begin{figure}[!ht]
+    \centering
+    \includegraphics[width = 0.88\linewidth]{figures/vix_decomposition.jpeg}
+    \caption{Time-series of the implied variance and the expected realized variance time series (all in monthly percentages). To compute the implied variance (\emph{IV}), we convert \emph{VIX} index values as $VIX_{t, \tau}^2 / 120,000$. \emph{ERV} is the predicted realized variance $E_{t,\tau}\left(RV_{t,\tau}{(22)}\right)$ as of Equation~\eqref{eq:rv_regression} and \emph{VRP} is the estimated variance risk premium ($IV -  ERV$) where the realized future variance $RV_{t,\tau}^{(22)}$ is the sum of squared 5-minute S\&P~500 returns from the current point in time until the market close 22 trading days ahead.}
+     \label{fig:vix_rv}
+\end{figure}
+
+The figure largely resembles the findings of \cite{bekaerthoerova2021} and illustrates persistent variations of the variance risk premium during volatile market periods. In line with \cite{bekaerthoerova2021} we find that \emph{VRP} is positive after large shocks for a while but tends to zero during periods of minor shocks. This suggests that the representative investor is risk-averse in periods following shocks but close to risk-neutral if no further large shocks hit the market for an extended period. The two components, \emph{VRP} and \emph{ERV} are close to orthogonal at a five-minute frequency.\footnote{The sample correlation between the two components is negative in the data, but we believe this is spurious and due to imperfect estimation of the \emph{ERV} change.  Given that we compute the \emph{VRP} component as the residual component, a positive measurement error in \emph{ERV} mechanically becomes a negative measurement error in VRP.} We note that estimation error in $\widehat{E}_{t, \tau}\left(RV_{t, \tau}^{(22)}\right)$ directly affects the measurement of $\widehat{VRP}_{t, \tau }$. All our empirical results, however, are robust to replacing $\widehat{E}_{t, \tau}\left(RV_{t, \tau}^{(22)}\right)$ by $RV_{t,\tau}^{(22)}$ which implies perfect foresight of the investor. In other words, estimation uncertainty of the expected realized variance does not affect our results qualitatively. 
+
+The regression results themselves indicate the relevance of intraday data even for long-run forecasts of the realized variance. Figure~\ref{fig:regression_coefficients} in the Appendix illustrates the goodness-of-fit and the estimated regression coefficients of the predictive regression in Equation~\eqref{eq:rv_regression}. We find that the average full-sample adjusted R$^2$ of the predictive regression in Equation~\eqref{eq:rv_regression} is 35\%. Omitting $\widetilde{RV}_{t, \tau}$ in Equation~\eqref{eq:rv_regression} and setting $\delta_\tau = 0$  yields a smaller average adjusted R$^2$ of 33\%. The upward slope for our benchmark model indicates that as the trading day progresses, future realized variances can be explained considerably better than at the beginning of the trading day. At the same time, ignoring intraday information by omitting $\widetilde{RV}_{t, \tau}$ in the regression indicates that as the trading day progresses, the predictive performance for future realized variances becomes worse, presumably because $RV_{t-22, 0}^{(21)}$ and $RV_{t-5, 0}^{(4)}$ are based on information that becomes more and more outdated.
+$\hat\delta_\tau$ is significantly different from zero for each regression specification. We thus find that intraday information receives substantially higher weights towards the end of the trading day than the model that omits intraday information.
+
+\subsection{NASDAQ message data}
+We collect message-level snapshots of the NASDAQ limit order book for two actively traded ETFs that provide exposure to different underlying baskets: S\&P~500 (SPY) and government bonds (TLT).\footnote{SPY tracks a basket of assets representing the S\&P~500 index. TLT holds a 99\% weight in US Treasury bonds with a maturity longer than 20 years} We retrieve and evaluate the entire available order book message history from July~1st 2007 to April~7th 2021 from data provider LOBSTER. 
+Our sample contains a record for \emph{each} message (submissions, adjustments, and cancellations of market and limit orders) and reconstructed snapshots of the complete order book for the first 50 levels.\footnote{We do not trim or winsorize any variables in our sample. After careful analysis we decided to remove two extreme and short-lived events from our analysis: A 10-minute episode during the Flash Crash period in the interval from May 6th, 2010 from 14:40 until 14:50 for which the NASDAQ order book indicates an unreasonably large order book imbalance and a 10-minute episode on April 29th, 2008 from 13:30 until 13:40 during which NASDAQ recorded a 1.5 Billion USD SPY buy market order which is more than 15 times the size of the \emph{second-largest} observed buy order in the entire sample.}
+
+We restrict our analysis to order book activity during regular trading hours. To avoid idiosyncrasies associated with opening and closing auctions we only consider messages between 10~a.m.~and 3.30~p.m.EST (or 30 minutes after the opening auction and until 30 minutes before the closing auction if NASDAQ deviates from regular opening and closing hours, e.g., due to holidays). 
+The entire dataset comprises more than 20 billion order book messages.
+We aggregate the order book messages for each ticker into the following six variables, measured at 5-minute intervals. 
+ \begin{enumerate}
+ 	\item Initiator net volume (in million USD) which is the net of buyer and seller initiated shares transacted during the last 5-minute interval. We sign transactions as +1 if executed against a sell-side limit order and -1 if executed against a buy-side limit order. For execution against a hidden limit order, we impose the sign +1 if the transaction executes at a price that exceeds the last observed midquote and -1 if the transaction price is below the last observed midquote. To make the values comparable across assets, we multiply the aggregate net number of traded shares with the rolling 12-month average midquote computed for each ticker.
+	\item Return (in basis points) computed as $\log(p_{t, \tau}) - \log(p_{t, \tau - 1})$, where $t$ corresponds to the trading day and 5-minute time stamps are $\tau \in\left\{0, \ldots, 78\right\}$ which range from 09:30~a.m.~($\tau = 0$) until 4:00~p.m.~($\tau = 78$). $p_{t, \tau}$ is the last observed midquote on day $t$ before time stamp $\tau$. 
+	\item  Trading volume (in million USD), which is the cumulative trading volume during each 5-minute interval. We compute trading volume as the number of traded shares times the transaction price. 
+	\item Bid-ask spread (in basis points), computed as the time-weighted average difference between the best prices quoted at the sell and buy side of the order book during each 5-minute interval. We compute the bid-ask spread relative to the current midquote for every order book snapshot. 
+	\item Depth (in million USD), measured as the number of posted shares in visible limit orders 5 basis points from the current best price on both sides of the order book. We take the time-weighted average depth during each interval to aggregate depth from message level into 5-minute intervals. To make the values comparable across assets, we multiply the number of available shares with the rolling 12-month average midquote computed for each ticker. 
+	\item Amihud illiquidity measure, computed every five minutes as $ILLIQ_{t, \tau} := {\left|\log(p_{t, \tau}) - \log(p_{t, \tau - 1})\right|}/{V_{t,\tau}}$. $ILLIQ_{t, \tau}$ corresponds to the absolute midquote log return divided by trading volume $V_{t, \tau}$ executed on NASDAQ  (in million USD). High values indicate large price impacts per unit traded and are thus associated with illiquidity \citep{Amihud.2002}. In our empirical analysis, we set $ILLIQ_{t, \tau}$ to missing values for time stamps for which the trading volume is zero.  
+
+\end{enumerate}
+Figure \ref{fig:summary_stats_sample} illustrates the dynamics of the six variables for each ticker during the 14-year sample period. The figure shows the high dispersion of returns (measured, e.g., as the interquartile range) during the global financial crisis and the COVID-19 market turbulence. 
+In line with \cite{angelharrisspatt15} we confirm that quoted bid-ask spreads decreased considerably during the last years across all asset classes. At the same time, however, we document that depth also decreased for our selected ETFs. While Figure \ref{fig:summary_stats_sample} illustrates this trend for depth measured 5 basis points around the current best price, Table \ref{tab:summary_statistics} in the Appendix provides additional summary statistics and indicates parallel trends deeper in the order book but also at the best level.  
+
+It should be noted that LOBSTER covers messages executed on NASDAQ only. Thus, trading volume $V_{t, \tau}$ is not a market-wide measure. Therefore, interpreting time trends for the ILLIQ time series in our sample makes sense only under the assumption that the NASDAQ market share has not changed over time. However, we expect a very high correlation between ILLIQ and a measure of illiquidity computed with market-wide trading volume at high frequencies. 
+
+\begin{figure}[hp]
+   \rotatebox{90}{%
+     \begin{minipage}{\textheight}%
+    \centering
+    \includegraphics[width = 0.88\linewidth]{figures/sample_summaries.jpeg}
+    \caption{Summary statistics of the measured variables. \emph{Initiator net volume} (in million USD), \emph{return} (in basis points), \emph{trading volume} (in million USD), \emph{bid-ask spread} (in basis points), \emph{depth} (in million USD) and the \emph{Amihud} illiquidity measure. The assets correspond to ETFs which represent different baskets: \emph{SPY} (S\&P~500) and \emph{TLT} (government bonds). We aggregate the 5-minute observations on an annual basis as box plots. The outer lines indicate the 5\% and 95\% quantiles, the boxes illustrate the first and third quartile as well as the median.}
+     \label{fig:summary_stats_sample}
+     \end{minipage}%
+  }%
+\end{figure}
+
+\section{Quantifying impulse responses}\label{sec:methodology}
+\subsection{Local projections}
+Our aim is to quantify the responses of the time series in our sample to a shock of the IV components, i.e., the variance risk premium $VRP$ (related, e.g., to crash risk probabilities or to risk aversion) or the expected realized variance $ERV$. 
+Denote the  $(N \times 1)$ vector of observations at time point $\tau$ by $\bm{y}_\tau = \left(y_{\tau, 1}, \ldots, y_{\tau, N}\right)'$. We assume that $\bm{y}_\tau$ follows a vector autoregressive (VAR) model of the form 
+\begin{equation}\label{eq:var_1}
+    \bm{y}_{\tau} = \sum_{j=1}^p\bm{A}_j\bm{y}_{\tau-j} + \bm{u}_\tau,
+\end{equation}
+where $\bm{A}_j$ are $(N \times N)$ coefficient matrices and $\bm{u}_\tau$ are $(N\times 1)$ vectors of white noise variables with variance-covariance matrix ${\bm{\Sigma}}_{u}$. 
+Impulse response functions (IRFs) measure the response of the variable $y_{\tau+h, i}$ to a shock $\bm{d}$ of the error term vector $\bm{u}_{\tau}$ in period $\tau$. By defining $\mathcal{F}_{\tau}:= \left\{\bm{y}_{\tau}, \ldots, \bm{y}_{1}\right\}$, the common definition of an IRF is the difference between the conditional expectations   $E\left(y_{\tau + h, i}|\bm{u}_\tau = \bm{d}, \mathcal{F}_{\tau-1}\right)$ and $ E\left(y_{\tau + h, i}|\bm{u}_\tau = \bm{0}_N, \mathcal{F}_{\tau-1}\right)$, where $\bm{0}_N$ denotes a $(N \times 1)$ vector of zeros. In the case of VAR models, this definition is equivalent to   \begin{equation}\label{eq:main_definition_irf}
+\text{ir}_i\left(\bm{u}_{\tau}, h, \bm{d}\right) := E\left(y_{\tau + h, i}|\bm{u}_\tau = \bm{d}, \mathcal{F}_{\tau-1}\right) - E\left(y_{\tau + h, i}|\mathcal{F}_{\tau-1}\right),
+\end{equation}
+where in the latter term the variables $\bm{u}_{\tau}$ are integrated out. This concept is referred to as \emph{generalized} impulse response function according to \cite{Koop.1996}.  
+
+Denote $\bm{e}_i$ as the $(N\times 1)$ selection vector with unity as $i$-th element and zeros otherwise. In the given VAR model according to Equation~\eqref{eq:var_1}, the IRF can be obtained from the corresponding moving average (MA) representation 
+$\bm{y}_{\tau+h} = \sum_{l=0}^\infty\bm\Phi_l\bm{u}_{\tau+h-l}$, where $\bm{\Phi}_0 = \bm{I}_N$ is the $(N\times N)$ identity matrix and $\bm{\Phi}_l$ are the MA coefficient matrices corresponding to $\bm{\Phi}_l=\partial \bm{y}_{\tau+l}/\partial \bm{u}_{\tau}'$. Then, the IRF is obtained by 
+$\text{ir}_i\left(\bm{u}_{\tau}, h, \bm{d}\right) = \bm{e}_i'\bm{\Phi}_h\bm{d}$. 
+Estimating the IRF requires backing out $\bm{\Phi}_l$ from the estimates of underlying VAR coefficients $\bm{A_j}$, $j=1,\ldots,p$. As a result, estimates are prone to estimation errors and sensitive to the choice of the underlying VAR model.
+
+Estimating $\text{ir}_i\left(\bm{u}_{\tau}, h, \bm{d}\right)$ in a \emph{direct} way by local projections as proposed by \cite{Jorda.2005} avoids these difficulties.\footnote{R Code to replicate all results of the paper, including functions implementing the augmented local projections, is available from the corresponding author's homepage.} To illustrate the idea of local projections, we re-formulate Equation~\eqref{eq:var_1} for $y_{\tau+h,i}$ and express the process by backward substitution in terms of $\bm{y}_{\tau}, \bm{y}_{\tau-1}, \ldots, \bm{y}_{\tau-(p-1)}$: 
+\begin{equation}\label{eq:var_1_rearranged}
+    {y}_{\tau + h,i} = \bm{\beta}_i(\bm{A},h)'\bm{y}_\tau + \sum_{l=1}^{p-1}\bm{\delta}_{l,i}(\bm{A},h)'\bm{y}_{\tau-l} + \xi_{\tau,i}.
+\end{equation}
+Here, $\bm{\beta}_i(\bm{A},h)$ denotes the $(N\times 1)$ vector of local projection coefficients and corresponds to a function of the VAR coefficient matrices $\bm{A}_1,\ldots,\bm{A}_p$. Likewise, $\bm{\delta}_{l,i}(\bm{A},h)$ is a $(N\times 1)$ vector of coefficients associated with $\bm{y}_{\tau-l}$, $l\ge 1$. %(also depending on $\bm{A}_1,\ldots,\bm{A}_p$) resulting from iterating Equation~\eqref{eq:var_1}. 
+Finally, $\xi_{\tau,i}=\sum_{l=1}^h \bm{\beta}_i(\bm{A},h-l)'\bm{u}_{\tau+l}$ is the model-implied $h$-step-ahead forecasting error. 
+For example, in the special case of a VAR(1) model, we have $\bm{\delta}_{l,i}(\bm{A},h)=\bm{0}$ for $l\ge 1$ and $\bm{\beta}_i(\bm{A},h)=(\bm{A}_1^h)'\bm{e}_i$, corresponding to the (transposed) $i$-th row of the matrix $\bm{A}_1^h$.
+
+Local projection coefficients $\bm{\beta}_i(\bm{A},h)$ correspond to the derivatives
+$
+\partial \bm{y}_{\tau+h,i}/\partial \bm{y}_{\tau}=\partial \bm{y}_{\tau+h,i}/\partial \bm{u}_{\tau}=(\partial \bm{y}_{\tau+h}/\partial \bm{u}_{\tau}')'\bm{e}_i$ and thus we have $\bm{\beta}_i(\bm{A},h)=\bm{\Phi}_h'\bm{e}_i
+$.
+Consequently, an alternative formulation of $\text{ir}_i\left(\bm{u}_{\tau}, h, \bm{d}\right)=\bm{e}_i'\bm{\Phi_h}\bm{d}$ is
+\begin{equation}
+\text{ir}_i\left(\bm{u}_{\tau}, h, \bm{d}\right)= \bm{\beta}_i(\bm{A},h)'\bm{d}.
+\end{equation}
+It is straightforward to estimate the local projection coefficients $\bm{\beta}_i(\bm{A},h)$ by means of a linear regression of ${y}_{\tau + h,i}$ on 
+$\bm{x}_{\tau}:=(\bm{y}_{\tau}',\bm{y}_{\tau-1}', \ldots, \bm{y}_{\tau-(p-1)}')'$, 
+yielding the OLS estimates
+\begin{equation} \label{eq:ols}
+\begin{pmatrix}
+\bm{\hat\beta}_i(h) \\
+\bm{\hat\gamma}_i(h)
+\end{pmatrix}
+= \left(\sum\limits_{\tau=1}^{T-h}\bm{x}_\tau\bm{x}_\tau'\right)^{-1}\sum\limits_{\tau=1}^{T-h}\bm{x}_\tau y_{\tau+h,i},
+\end{equation}
+where $\bm{\hat\beta}_i(h)$ is the $(N \times 1)$ vector of OLS coefficients associated with $\bm{y}_{\tau}$.
+As shown by \cite{Plagmoller.2020}, $\bm{\hat\beta}_i(h)$ is a consistent estimator of $\bm{\beta}_i(\bm{A},h)$, and thus $\widehat{ir}_i\left(\bm{u}_{\tau}, j, \bm{d}\right) = \bm{\hat\beta}_i(h)'\bm{d}$ is a consistent estimator of the impulse response function $\text{ir}_i(\bm{u}_{\tau}, h, \bm{d})$. 
+
+Likewise, we obtain estimates of the cumulative impulse response function from 
+\begin{equation}
+    \widehat{cir}_i(\bm{u}_{\tau}, h, \bm{d})=\sum_{j=0}^h \widehat{ir}_i(\bm{u}_{\tau}, j, \bm{d})= \sum_{j=1}^h \hat{\bm{\beta}}_i(j)'\bm{d},
+\end{equation}
+since $\hat{\bm{\beta}}_i(0)=\bm{I}_N$.
+
+\subsection{Lag-augmentation}\label{sec:method}
+While the least square estimator $\hat{\bm{\beta}}_i(h)$ is consistent, it is not easy to compute standard errors since the residuals $\hat\xi_{\tau,i}$ based on Equation~\eqref{eq:ols} are serially correlated. This requires the construction of a heteroscedasticity and autocorrelation consistent (HAC) estimator of the error covariance matrix, which is not straightforward and renders inference challenging. 
+
+As an alternative, \cite{Plagmoller.2020} propose estimating $\bm{\beta}_i(\bm{A},h)$ by lag augmentation, which keeps the estimator consistent but removes the serial dependence in the residuals. 
+The idea of lag augmentation is to augment the regressors $\bm{x}_{\tau}$ by one additional lag, $\bm{y}_{\tau-p}$, which 
+%, according to Equation~\eqref{eq:var_1_rearranged} has population regression coefficients of zero, but 
+serves as an additional control variable.
+
+Hence, in the lag-augmented regression, we regress ${y}_{\tau + h,i}$ on $\tilde{ \bm{x}}_{\tau}:=(\bm{y}_{\tau}',\bm{y}_{\tau-1}', \ldots, \bm{y}_{\tau-p}')'$ yielding
+\begin{equation} \label{eq:ols_augment}
+\begin{pmatrix}
+\bm{\hat\beta}_i^a(h) \\
+\bm{\hat\gamma}_i^a(h)
+\end{pmatrix}
+= \left(\sum\limits_{\tau=1}^{T-h}\tilde{\bm{x}}_\tau\tilde{\bm{x}}_\tau'\right)^{-1}\sum\limits_{\tau=1}^{T-h}\tilde{\bm{x}}_\tau y_{\tau+h,i},
+\end{equation}
+where $\bm{\hat\beta}_i^a(h)$ is of dimension $(N \times 1)$. \cite{Plagmoller.2020} show that $\bm{\hat\beta}_i^a(h)'\bm{d}$ is also a consistent estimator for $\text{ir}_i(\bm{u}_{\tau}, h, \bm{d})$, while the residuals resulting from this regression are serially uncorrelated. Thus, standard errors of $\bm{\hat\beta}_i^a(h)$ can be computed using the Eicker-Huber-White heteroscedasticity-robust covariance estimator without the need of controlling for serial correlation.
+
+\subsection{Choice of the shock size}
+Contemporaneous correlations of the errors $\bm{u}_\tau$, i.e., a non-diagonal covariance matrix ${\bm{\Sigma}}_{u}$, render it impossible to attribute a shock exclusively to a single variable. 
+A traditional solution, as proposed by \cite{Sims.1980}, is to orthogonalize the errors based on a Cholesky decomposition of ${\bm{\Sigma}}_{u}$. The orthogonalized errors then depend recursively on the original errors, which makes the approach sensitive to the ordering of the variables. 
+
+To overcome the need of imposing an (often arbitrary) ordering of the variables, \cite{Pesaran.1998} and \cite{Koop.1996} make use of the definition of a IRF as of Equation~\eqref{eq:main_definition_irf} and the fact that under the assumption of multivariate normality of $\bm{u}_\tau$, it follows that $ 
+\bm{d} = E(\bm{u}_\tau|{u}_{\tau,j} = \delta) = {\bm{\Sigma}}_{\bm{u}} \bm{e}_j\sigma_{jj}^{-1}\delta,$
+where $\sigma_{jj}$ is the $j$-th diagonal element of ${\bm{\Sigma}}_{\bm{u}}$ and $\delta\neq0$ denotes the shock in element $j$. Intuitively, a shock on the $j$-th error with size $\delta$ implies instantaneous adjustments in all other errors due to contemporaneous correlations as reflected by ${\bm{\Sigma}}_{\bm{u}}$. This yields IRFs which are insensitive to the initial ordering of the variables. 
+
+By choosing $\delta$ as a one-standard-deviation shock, $\delta = \sqrt{\sigma}_{jj}$, we therefore obtain
+\begin{equation}
+\bm{d} = E\left(\bm{u}_\tau|{u}_{\tau, j} = \sqrt{\sigma}_{jj}\right) = {\bm{\Sigma}}_{\bm{u}} \bm{e}_j\sigma_{jj}^{-1/2}.
+\label{eq:generalized_irf}
+\end{equation}
+Given a consistent estimate ${\bm{\hat\Sigma}}_{\bm{u}}$, the IRF is then estimated as \begin{equation}\label{eq:irf_specification_empirics}
+\widehat{ir}_i\left(\bm{u}_{\tau}, h, \bm{d}\right)=\bm{\hat\beta}_i^a(h)'{\bm{\hat\Sigma}}_{\bm{u}} \bm{e}_j\hat\sigma_{jj}^{-1/2}.
+\end{equation}
+We implement this approach in three steps. First, we determine the lag length of the underlying VAR process using the AIC criterion. Then, $\bm{\hat\beta}^a_i(h)$ results from corresponding lag-augmented local projections as of Equation~\eqref{eq:ols_augment}. Finally, we obtain ${\bm{\hat\Sigma}}_{\bm{u}}$ from maximum likelihood estimates based on the residuals of a VAR($p$) process. 
+
+\subsection{Standard errors}
+We show in the Appendix that for $T \rightarrow \infty$
+\begin{equation} \label{eq_AV_IR}
+	\sqrt{T}\left( {\widehat{\text{ir}}}_i\left(\bm{u}_\tau, h, \bm{d}\right) -  {{\text{ir}}}_i\left(\bm{u}_\tau, h, \bm{d}\right)\right) \overset{a}{\sim} N\left(0, \bm{d}'AV[\hat{\bm{\beta}}_i^a(h)]\bm{d} + \frac{2}{\sigma_{jj}}\bm{U}\bm{P}\left(\bm{\Sigma}_{\bm{u}} \otimes \bm{\Sigma}_{\bm{u}}\right)\bm{U}' \right),
+\end{equation}
+where $\bm{U} = \left(\bm{e}_j' \otimes \bm{\beta}_i^a(h)' \right) - 1/2 \sigma_{jj}^{-1/2}{{\text{ir}}}_i\left(\bm{u}_\tau, h, \bm{d}\right)\left(\bm{e}_j'\otimes \bm{e}_j'\right)$, $AV[\hat{\bm{\beta}}_i^a(h)]$ is the asymptotic variance of $\sqrt{T}\hat{\bm{\beta}}_i^a(h)$, and $\bm{P} = \bm{D}_N(\bm{D}_N'\bm{D}_N)^{-1}\bm{D}_N'$ is the $\left(N^2 \times N^2\right)$ projection matrix based on the duplication matrix $\bm{D}_N$. 
+
+Then, using the (Eicker-Huber-White heteroscedasticity-robust) estimates  $\hat{V}[\hat{\bm{\beta}}_i^a(h)]$ resulting from the local projections and the maximum likelihood estimates $\bm{\hat{\Sigma}}_{\bm{u}}$ yields the standard errors for $\widehat{\text{ir}}_i\left(\bm{u}_\tau, h, \bm{d}\right)$ given by 
+\begin{equation} \label{eq_SE_IR}
+\text{SE}(\widehat{\text{ir}}_i\left(\bm{u}_\tau, h, \bm{d}\right))= 
+\hat{V}(\widehat{\text{ir}}_i\left(\bm{u}_\tau, h, \bm{d}\right))^{1/2}=
+\left(T^{-1}\hat{\bm{d}}'\hat{V}[\hat{\bm{\beta}}_i^a(h)]\hat{\bm{d}} + \frac{2}{\hat{\sigma}_{jj}}\hat{\bm{U}}\bm{P}\left(\bm{\hat{\Sigma}}_{\bm{u}} \otimes \bm{\hat{\Sigma}}_{\bm{u}}\right)\hat{\bm{U}}'\right)^{1/2},
+\end{equation}
+where $\hat{\bm{d}}=\bm{\hat{\Sigma}}_{\bm{u}}\bm{e}_j{\hat{\sigma}_{jj}^{-1/2}}$, and $\hat{\bm{U}}=\left(\bm{e}_j' \otimes \hat{\bm{\beta}}_i^a(h)' \right) - \frac{1}{2}\hat{\sigma}_{jj}^{-1/2}{\widehat{\text{ir}}}_i\left(\bm{u}_\tau, h, \bm{d}\right)\left(\bm{e}_j'\otimes \bm{e}_j'\right)$.
+
+Likewise, as we also show in the Appendix, standard errors of the estimated cumulative impulse response function $\widehat{cir}_i(\bm{u}_{\tau}, h, \bm{d})$ can be computed by Equation~\eqref{eq_SE_IR} with $\hat{\bm{\beta}}_i^{a(h)}$ replaced by $\sum_{k=1}^h\hat{\bm{\beta}}_i^{a(h)}$ and 
+$\hat{V}\left(\hat{\bm{\beta}}_i^{a(h)}\right)$ replaced by $\sum_{k=1}^h\hat{V}\left(\hat{\bm{\beta}}_i^{a(h)}\right)$. 
+
+\section{Market responses to a VIX impulse}\label{sec:results}
+
+As outlined in Section~\ref{sec:example}, a shock of the implied variance \emph{IV} does not reveal whether heightened expected realized variance or an increase in the variance risk premium causes the change. 
+We use our intraday decomposition of the implied variance from Equation~\eqref{eq:risk_aversion} as the sum of expected realized variance \emph{ERV} and the variance risk premium \emph{VRP}
+\begin{equation}
+    \widehat{IV}_{t,\tau}^{(22)} = \widehat{E}_{t,\tau}\left(RV_{t,\tau}^{(22)}\right) + \widehat{VRP}_{t,\tau}^{(22)}
+\end{equation} 
+and shock the two components individually. 
+In particular, we estimate IRFs to quantify market responses to a shock in either the variance risk premium \emph{VRP} or the expected realized variance \emph{ERV}. To characterize such responses, we estimate IRFs based on Equation~\eqref{eq:irf_specification_empirics}. 
+
+For that purpose, we include the variables from the limit order book sample together with changes in $\widehat{E}_{t,\tau}\left(RV_{t,\tau}^{(22)}\right)$ and changes in $\widehat{VRP}_{t,\tau}^{(22)}$ into our IRF estimations. 
+The response variables are always the time series of 5-minute observations of the six aggregated order book variables (initiator net volume, return, trading volume, bid-ask spread, depth, and the Amihud ILLIQ measure) for the two ETFs which track S\&P~500 and government bonds. 
+
+We always report the estimated cumulative impulse response functions for the initiator net volume (in million USD) and returns (in basis points). We report impulse response functions for trading volume and depth (all in million USD), bid-ask spreads (in basis points), and the Amihud (ILLIQ) measure. To compute confidence intervals, we rely on the standard errors of $\widehat{ir}_i\left(\bm{u}_{\tau}, h, \bm{d}\right)$ and $\widehat{cir}_i\left(\bm{u}_{\tau}, h, \bm{d}\right)$ in Equation~\eqref{eq_SE_IR}. 
+When lagging variables, we only include observations from the same trading day to exclude overnight effects from the analysis.
+
+\subsection{Delineating the IV shock responses}\label{sec:irf_decomposed}
+
+The purple and green bars in Figure~\ref{fig:irf_vix_decomposition} illustrate the estimated instantaneous (0 minutes), 20 minutes, 40 minutes and 60 minutes responses to the individual shocks.\footnote{We do not report the response of (cumulative) \emph{IV}, \emph{VRP}, or \emph{ERV} changes in the main figures. \emph{IV} shocks are persistent, in the sense that a one standard deviation \emph{IV} shift triggers a further 8\% increase during the next 20 minutes and then slowly decays again. Similar persistence characterizes the dynamics of \emph{VRP}, or \emph{ERV} changes.} The shock sizes are always a positive standard deviation, which corresponds either to an increase in the variance risk premium \emph{VRP} or the expected realized variance \emph{ERV}. 
+The values can be compared to the yellow bar (\emph{IV}) which corresponds to the responses based on imposing a positive shock on \emph{IV}.  The estimated IRFs, therefore, reflect how a risk shock materialized as a sudden \emph{IV} increase ripples through financial markets at different frequencies.
+
+\begin{figure}[hp]
+   \rotatebox{90}{%
+     \begin{minipage}{\textheight}%
+    \centering
+    \includegraphics[width = 0.84\linewidth]{figures/irf_iv_decomposition_raw_full.jpeg}
+    \caption{Estimated impulse response functions for the three different measures of risk, \emph{IV} are the IV changes, \emph{ERV} is the standardized change in expected realized variance and \emph{VRP} is the standardized change in the variance risk premium, measured as ${VRP}_{t, \tau}^{(22)} = IV_{t, \tau}^{(22)} - {E}_{t, \tau}\left(RV_{t, \tau}^{(22)}\right)$. 
+    We always impose a positive shock of size one standard deviation. 
+    \emph{Returns} and \emph{initiator net volume} responses denote \emph{cumulative} responses, whereas for \emph{trading volume}, \emph{depth}, \emph{ILLIQ} and \emph{bid-ask spread} we report impulse responses. We report \emph{Return} and \emph{bid-ask spread} responses in basis points, and denote the remaining variables in million USD. \emph{Horizon} denotes the instantaneous (0 minutes), 20 minutes, 40 minutes and 60 minutes responses. }
+    \label{fig:irf_vix_decomposition}\label{fig:full_irf_vix}
+ \end{minipage}%
+  }%
+\end{figure}
+
+\subsubsection{Responses to a \emph{VRP} shock}
+
+We find that a variance risk premium \emph{VRP} shock triggers a flight to safety on largely unchanged liquidity. Depth slightly deteriorates across all asset classes, and spreads widen but only at small magnitudes.
+Our main insights are as follows:
+
+\paragraph{Strong initiated sell-side volume for risky assets.} Investors initiate net selling of the S\&P~500 as a response to a \emph{VRP} shock.
+Within the first 5 minutes after the \emph{VRP} shock, net selling of S\&P~500 worth more than USD 3 million hits the market. 
+While the sell-off of the risky assets starts as soon as the \emph{VRP} shock hits, negative cumulative net initiated selling increases further within the hour by almost 40\%. 
+Asset prices react substantially faster than net initiated selling to the predictable portfolio re-balancing triggered by the \emph{VRP} shock. 
+The second row of Figure~\ref{fig:full_irf_vix} indicates that the immediate price impact of the initiated selling in the S\&P~500 is about four basis points. The effects are economically meaningful: The instantaneous initiated sell side volume in the S\&P~500 corresponds to a negative 0.25 standard deviation response. 
+The negative return response for the S\&P~500 is larger than 0.6 standard deviations.
+The response functions indicate that the immediate response to the unpredictable shock in \emph{VRP} is stronger than the long-run responses. 
+This finding is in line with market makers anticipating the predictable order flow and thus reflecting a liquidity premium for immediate responses to a sudden \emph{VRP} shock \citep[e.g., ][]{Menkveld.2021}.
+More specifically, the return effect of the shock declines by about 20\% in the subsequent hour. 
+
+\paragraph{Flight to safe government bonds.} The \emph{VRP} shock triggers net-initiated buying of safe government bonds. We interpret the response as a reallocation from risky assets to government bonds in the sense of a flight to safety. The initiated net buying of government bonds amplifies as the \emph{VRP} shock triggers continued buying of government bonds within the hour. Prices for government bonds instantaneously increase by 1.0 basis points (0.2 standard deviations) and thus reflect the sudden demand shock. 
+
+\paragraph{Liquidity remains stable.} 
+Liquidity responses to a \emph{VRP} shock are of minor economic magnitudes. 
+Rows three to six of Figure~\ref{fig:full_irf_vix} illustrate the responses regarding bid-ask spread, depth, and ILLIQ to a sudden \emph{VRP} shock. 
+While trading volume across all asset classes increases significantly, both instantaneously and within the hour, bid-ask spreads, order book depth and the ILLIQ measure responses are of minor economic magnitudes.
+The instantaneous responses indicate that the bid-ask spread increases slightly for S\&P~500 in response to a \emph{VRP} shock but remains unchanged for government bonds. 
+Order book depth decreases across all asset classes. Surprisingly, we find that illiquidity for the S\&P~500 decreases in response to a \emph{VRP} shock, while it remains constant for government bonds. Order book depth drops across all assets within the hour, and bid-ask spreads widen. 
+
+Our estimated IRFs thus reveal that investors fly to safety in times of elevated risk. A \emph{VRP} shock triggers fast net selling of risky assets and simultaneous initiated net buying of government bonds.\footnote{Our results are not restricted to using S\&P 500 tracking ETFs. Indeed, using Corporate- or Junk-Bond tracking ETFs yields qualitatively similar results. } 
+The responses reveal that such portfolio re-allocation at the high-frequency level does not trigger liquidity spirals immediately as a response. Liquidity provisioning remains largely unchanged and thus absorbs the demand for fast reallocation.
+
+\subsubsection{Responses to an \emph{ERV} shock}
+
+In a nutshell, we find that an expected realized variance \emph{ERV} shock surprisingly triggers \emph{net buying of equity while liquidity deteriorates}.
+
+\paragraph{Initiated buying of equity.} A shock in the \emph{ERV} triggers \emph{positive} initiator net volume for S\&P~500. Thus, after the expected realized variance increases, liquidity demanders start buying the risky assets. Such buying starkly contrasts the flight to safety dynamics in response to a \emph{VRP} shock: Liquidity demanders seem to become net buyers of risky assets after the \emph{ERV} shock is realized. Our results are \emph{not} driven by active selling of non-US equity and rebalancing toward US equities. In unreported results, we replace the S\&P 500 tracking ETF \emph{SPY} with an ETF that tracks the MSCI World index and find qualitatively similar results: Initiated buying of (world) equity.
+
+\paragraph{Liquidity deteriorates.}  
+In response to an \emph{ERV} shock, ILLIQ increases substantially, which suggests a higher price impact on volume. Thus, trading becomes more expensive and markets more fragile.  
+Trading volume, depth, and bid-ask spread responses also react mainly to \emph{ERV} shocks.
+Figure~\ref{fig:irf_vix_decomposition} indicates that spreads increase for all asset classes within the first 5 minutes after an \emph{ERV} shock. 
+Thus, the slight decrease in bid-ask spread after an \emph{IV} shock can be fully attributed to the responses after a \emph{VRP} shock. In contrast, an \emph{ERV} shock seems to impact liquidity providers such that liquidity deteriorates. 
+Similarly, depth declines substantially for all asset classes after an \emph{ERV} shock, strongly exceeding the liquidity adjustment in response to a \emph{VRP} shock. 
+
+\subsubsection{Crisis periods}
+Figure~\ref{fig:irf_iv_decomposition_raw_periods} in the Appendix provides a comparison of the (instantaneous) standardized impulse response coefficients based on different sample periods: We impose a positive one standard deviation shock on \emph{IV changes} during the Global Financial Crisis (\emph{GFC}) (September 1st, 2008 until September 1st, 2009), \emph{COVID-19} (February 15th, 2020 until February 15th, 2021) and the period in \emph{between} (September 2nd, 2009 until February 14th, 2020). Similarly, we compute the responses to shocks in the \emph{VRP} or the \emph{ERV}, respectively. 
+The ILLIQ measure increases after an \emph{ERV} shock.\footnote{These findings suggest that standard, readily observable liquidity metrics such as spread and depth are imprecise measures for the cost of executing large orders.  A better proxy for their transaction cost might be the price elasticity of net volume. This is in line with \cite{Hendershott.2014} who have an orthogonality result for the size of the bid-ask spread and the elasticity of (midquote) price elasticity to market-maker inventory, which both are endogenously derived in a dynamic inventory control model. 
+Price elasticity in their model is the extent to which a market maker skews the bid and ask quote to mean-revert out of non-zero inventory. This might be the more relevant liquidity metric for liquidity demanders who trade large orders.
+This price elasticity might be what ILLIQ picks up in our analysis.} 
+The response is particularly pronounced during the two crisis periods in our sample. We do find close to zero but negative instantaneous initiated net volume except for the Global Financial Crisis. This finding is in contrast to the surprising finding of \emph{net buying} of the risky asset after an \emph{ERV} shock. 
+
+\subsection{Institutional client response to an IV shock}
+
+In order to shed light on the channels which drive the initiator net volume dynamics, we exploit institutional transaction data to compute explicitly responses in signed volume which is caused by orders of institutional clients. For that purpose, we retrieve all available client transactions from data provider Abel Noser for the period from January 2009 until April 2013 which trade one of the two ETFs in our sample. 
+The Abel Noser sample is a proprietary dataset of institutional trading transactions and provides specific client trading execution which includes the side, execution price, the number of shares traded, intraday timestamps marking the order placement (when the institutional trader places the order with an external broker) and order execution. For a detailed description of the Abel Noser dataset, consult \cite{Hu.2018}.
+
+We retrieve the Abel Noser client transaction data and compute a measure for \emph{client net volume} for each trading day and 5-minute interval for the two ETFs. We provide details for the construction of the measure in the Appendix. 
+Client net volume measures the executed net initiated volume from institutional clients in million USD. We thus merge the order book and the client net volume data to estimate the responses of institutional client net volume to an \emph{IV} shock as well as a shock in \emph{VRP} and \emph{ERV}. 
+To that end, we re-estimate the coefficients of the impulse response function based on the entire available sample period (January 2009 until April 2013 for Abel Noser data) which include the 12 order book variables from Section~\ref{sec:data} and the 5-minute time series of initiated client net volume.
+
+In the same spirit as in Section~\ref{sec:results}, we impose a shock of one positive standard deviation in changes of either $\widehat{IV}_{t,\tau}^{(22)}$ or $\widehat{E}_{t, \tau}\left(RV_{t,\tau}^{(22)}\right)$ or $\widehat{VRP}_{t, \tau}^{(22)}$.
+Figure~\ref{fig:abel_noser_initiator_net_volume_irf} in the Appendix illustrates the resulting impulse response coefficients. 
+The responses of client net volume largely mirror initiator net volume and thus reinforce our findings regarding the general dynamics. 
+Specifically, we find that institutional trading responds to an \emph{IV} shock with initiated selling of equity at large magnitudes as well. 
+The flight to safety can be entirely attributed to a shock in \emph{VRP}. 
+Further, institutional client net volume turns \emph{positive} after an \emph{ERV} shock. 
+
+\section{Conclusions}\label{sec:conclusion}
+We set out to study the connection between flight-to-safety and market liquidity.  Our key contribution to a mature literature in both areas is to analyze their joint \emph{intraday} dynamics. We believe that any hope of unraveling their interrelationship requires a high-frequency analysis. Among the various approaches one could take, we picked one where an implied variance shock hits the market. Is there a flight to safety? Does market liquidity deteriorate?
+
+The empirical analysis of 2007-2021 NASDAQ ETF trading yields surprising results. We decompose \emph{IV} shocks into those driven by variance risk premium increases and those driven by expected realized variance increases. The response to a \emph{VRP} shock resembles flight to safety dynamics on unchanged liquidity. The equity ETF is actively sold and the government-bond ETF is actively bought.  The response to an \emph{ERV} shock, on the other hand, is a worsening of liquidity and \emph{net} buying of equities (instead of net selling in the VRP case). For a sub-period for which we have institutional flow data, we confirm this result of net buying after a ERV shock, but net selling after a \emph{VRP} shock.
+
+The intuition we offer for the differential response to these two types of canonical shocks is in the context of an information asymmetry explanation for liquidity \citep[as in, e.g., ][]{grossmanstiglitz80}.  The finding of a flight-to-safety on a \emph{VRP} shock is relatively straightforward.  Those who experience the increased risk-aversion shock become liquidity demanders.  They sell equities and buy government bonds.  Information asymmetry remains unaffected and there is, therefore, no effect on liquidity.
+
+One intuition for net buying of risky assets and impaired liquidity on an \emph{ERV} shock might be the following.  If there is an event raising the variance of future dividends, then some might receive a signal on what the ``news'' means for the level of future dividends.  In other words, they learn whether the news is good or bad.  This naturally makes them liquidity demanders trading on their signal.  Liquidity suppliers, on the other hand, remain uninformed other than learning that there was news.  They, therefore, experience higher posterior risk than the (informed) liqudity demanders.  In equilibrium, across good and bad news states, liquidity demanders \emph{have} to become net buyers to clear the market, because of their lower posterior risk.  This could explain the net buying of equities observed in the data.  And, this could explain the worsening of liquidity, simply because information asymmetry between liquidity demanders and suppliers increases.  
+
+These intuitions are purely speculative and there might very well be other intuitions for the empirical patterns we document.  We leave this to future research.  Other interesting questions are: Do retail investors respond the same way to the two types of shocks as institutional investors?  Do our findings hold internationally?  The current trend of mandatory disclosure of transactions to trade repositories makes more data available.  This ``big data'' build-up along with rapid development in AI to unravel potential non-linearities, enables further study to deepen our understanding of how markets respond to \emph{IV} shocks. Such understanding we deem to be of first-order importance, not only to academics but also to industry participants and regulators.
+
+{\small
+\singlespacing
+\bibliography{bibliography}}
+
+\appendix
+\renewcommand{\thesection}{\Roman{section}}
+\renewcommand{\thesubsection}{\Roman{subsection}}
+\setcounter{table}{0}
+\renewcommand{\thetable}{A\Alph{subsection}\Roman{table}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{A\Alph{subsection}\arabic{figure}}
+\setcounter{equation}{0}
+\renewcommand{\theequation}{\Alph{subsection}\arabic{equation}}
+
+\begin{landscape}
+\begin{table}
+\centering
+\resizebox{\linewidth}{!}{
+\begin{tabular}{llllllllllllllllll}
+\toprule
+  &   & 2007 & 2008 & 2009 & 2010 & 2011 & 2012 & 2013 & 2014 & 2015 & 2016 & 2017 & 2018 & 2019 & 2020 & 2021 & Total\\
+\midrule
+ & Amihud Measure & 0.07 (0.06) & 0.08 (0.08) & 0.12 (0.09) & 0.11 (0.09) & 0.12 (0.1) & 0.11 (0.09) & 0.12 (0.09) & 0.13 (0.11) & 0.17 (0.14) & 0.21 (0.18) & 0.16 (0.15) & 0.17 (0.15) & 0.15 (0.12) & 0.2 (0.16) & 0.14 (0.12) & 0.14 (0.13)\\
+
+ & Transaction size & 2.14 (0.23) & 1.48 (0.51) & 1.06 (0.21) & 1.12 (0.18) & 0.98 (0.2) & 1.24 (0.17) & 1.2 (0.15) & 1.14 (0.17) & 0.98 (0.18) & 0.92 (0.17) & 1.17 (0.13) & 0.82 (0.18) & 0.77 (0.13) & 0.65 (0.15) & 0.76 (0.12) & 1.08 (0.36)\\
+
+ & Depth (Best Level) & 3.45 (1.57) & 2.35 (3.95) & 2.13 (0.71) & 2.83 (1.13) & 1.93 (0.95) & 2.68 (1.06) & 2.48 (0.95) & 2.4 (1.1) & 1.28 (0.84) & 0.85 (0.32) & 1.1 (0.41) & 0.61 (0.32) & 0.63 (0.37) & 0.35 (0.19) & 0.45 (0.2) & 1.71 (1.61)\\
+
+ & Depth (50bp) & 326.84 (119.86) & 205.18 (140.52) & 148.61 (51.43) & 235.92 (78.86) & 124.71 (55.92) & 96.57 (32.85) & 112.19 (52.45) & 126.31 (50.9) & 50.73 (14.82) & 35.49 (7.01) & 41.01 (6.96) & 30.87 (7.74) & 35.76 (9.32) & 21.8 (5.05) & 21.18 (3.63) & 104.53 (97.69)\\
+
+ & Depth (5bp) & 139.96 (54) & 84.68 (85.7) & 41.1 (11.04) & 68.91 (15.31) & 49.79 (17.57) & 50.71 (13.71) & 70.17 (30.81) & 87.64 (33.2) & 31.28 (10.21) & 19.89 (5.02) & 28.14 (4.85) & 20.24 (6.44) & 22.09 (5.95) & 13.21 (4.91) & 15.36 (3.46) & 48.2 (42.18)\\
+
+ & Depth imbalance & -0.1 (8.7) & -0.04 (30.64) & -0.14 (2.9) & 0.01 (3.89) & 0.25 (2.71) & 0.07 (1.95) & 0.29 (3.38) & 0.01 (3.65) & -0.25 (3.46) & -0.01 (1.36) & -0.16 (2.02) & 0.07 (1.43) & 0.03 (1.86) & -0.07 (1.22) & 0.07 (1.15) & 0 (8.81)\\
+
+ & Return & -0.07 (10.53) & -0.05 (21.08) & 0.1 (13.85) & 0.02 (9.31) & 0 (10.92) & 0.04 (6.5) & 0.07 (5.66) & -0.02 (6.06) & 0.01 (7.47) & 0.05 (6.99) & 0.06 (3.73) & -0.08 (9.35) & 0.06 (6.37) & 0 (15.5) & 0.09 (8.73) & 0.02 (10.49)\\
+
+ & Initiator net volume & 0.51 (30.99) & 2.51 (30.88) & -0.66 (16.18) & -0.13 (13.38) & -0.48 (14.54) & -0.07 (9.35) & -0.18 (7.35) & 0.08 (7.26) & 0.32 (9.02) & -0.18 (5.53) & 0.11 (5.15) & -0.2 (8.04) & 0.04 (7.71) & 0.22 (8.86) & -0.17 (7) & 0.12 (13.87)\\
+
+ & Bid-ask Spread & 0.8 (0.09) & 1 (0.25) & 1.16 (0.19) & 0.91 (0.19) & 0.85 (0.1) & 0.76 (0.04) & 0.65 (0.04) & 0.58 (0.04) & 0.57 (0.05) & 0.56 (0.06) & 0.46 (0.04) & 0.48 (0.15) & 0.41 (0.06) & 0.5 (0.16) & 0.34 (0.06) & 0.68 (0.26)\\
+
+ & Trade ratio & 0.01 (0) & 0.01 (0) & 0.02 (0) & 0.01 (0) & 0.01 (0.01) & 0.01 (0) & 0.01 (0) & 0.01 (0) & 0.01 (0) & 0.01 (0) & 0.01 (0) & 0.02 (0.01) & 0.01 (0) & 0.01 (0.01) & 0.01 (0) & 0.01 (0.01)\\
+
+\multirow{-11}{*}{\raggedright\arraybackslash \rotatebox[origin=c]{90}{SP 500}} & Trading volume & 131.67 (107.69) & 174.57 (124.17) & 89.95 (65.27) & 69.99 (61.26) & 69.63 (58.73) & 49.05 (38.36) & 39.16 (33.55) & 36.67 (31.72) & 35.17 (30) & 24.76 (21.07) & 19.03 (15.9) & 40.04 (35.42) & 32.36 (28.42) & 47.17 (45.71) & 49.23 (40.12) & 58.65 (68.93)\\
+\cmidrule{1-18}
+ & Amihud Measure & 49.81 (547.8) & 61.31 (1521.51) & 20.8 (152.51) & 7.27 (32.65) & 2.73 (5.09) & 6.99 (346.01) & 4.32 (7.92) & 3.83 (5.43) & 3.34 (4.36) & 4.36 (6.77) & 2.65 (3.32) & 2.51 (3.22) & 2.13 (2.41) & 1.82 (1.92) & 1.52 (1.59) & 10.82 (435.11)\\
+
+ & Transaction size & 0.48 (0.13) & 0.39 (0.12) & 0.25 (0.04) & 0.29 (0.04) & 0.32 (0.04) & 0.35 (0.06) & 0.43 (0.06) & 0.36 (0.05) & 0.29 (0.04) & 0.34 (0.07) & 0.43 (0.07) & 0.51 (0.07) & 0.44 (0.09) & 0.35 (0.05) & 0.38 (0.05) & 0.37 (0.1)\\
+
+ & Depth (Best Level) & 0.36 (0.29) & 0.31 (0.3) & 0.23 (0.14) & 0.61 (0.3) & 0.55 (0.33) & 0.23 (0.1) & 0.38 (0.14) & 0.35 (0.13) & 0.29 (0.13) & 0.26 (0.1) & 0.36 (0.26) & 0.44 (0.21) & 0.45 (0.23) & 0.24 (0.47) & 0.4 (0.2) & 0.36 (0.27)\\
+
+ & Depth (50bp) & 6.1 (1.76) & 10.48 (6.22) & 7.82 (2.78) & 19.89 (11.69) & 17.66 (10.03) & 6.61 (2.52) & 12.83 (4.5) & 12.79 (3.2) & 11.95 (2.59) & 12.12 (4.28) & 16.19 (5.85) & 16.7 (6.07) & 12.21 (4.69) & 8.25 (2.99) & 14.59 (3.65) & 12.54 (6.97)\\
+
+ & Depth (5bp) & 2.86 (1.11) & 2.4 (1.55) & 2.13 (1.05) & 9.85 (5.46) & 9.74 (5.65) & 3.17 (1.09) & 6.87 (2.1) & 7.06 (1.67) & 6.29 (1.5) & 5.35 (1.51) & 6.42 (1.51) & 6.51 (1.42) & 5.72 (2.19) & 3.77 (1.71) & 6.44 (1.57) & 5.7 (3.5)\\
+
+ & Depth imbalance & 0.01 (1.54) & 0.04 (1.61) & 0.07 (0.54) & 0.15 (1.05) & 0.03 (0.54) & 0.02 (0.58) & 0.08 (0.99) & -0.06 (0.97) & -0.04 (0.54) & 0.02 (0.56) & 0.04 (1.07) & 0.05 (0.99) & -0.02 (0.46) & 0.01 (0.71) & 0 (0.54) & 0.03 (0.91)\\
+
+ & Returns & 0.09 (5.59) & -0.04 (9.12) & -0.04 (10.28) & -0.01 (7.76) & 0.16 (9.05) & -0.04 (6.81) & -0.05 (6.37) & 0.06 (5.51) & -0.03 (6.9) & -0.02 (6.26) & 0.06 (4.76) & -0.01 (4.78) & 0.03 (5.52) & -0.08 (10.55) & -0.01 (6.96) & 0 (7.38)\\
+
+ & Initiator net volume & 0.02 (0.61) & 0 (0.79) & -0.02 (0.58) & -0.01 (0.75) & 0 (0.98) & 0.01 (0.68) & 0.01 (0.78) & 0.02 (0.6) & 0.03 (0.73) & 0.02 (0.69) & 0.01 (1.07) & -0.01 (1.06) & 0 (0.89) & 0.01 (1.28) & 0.06 (1.5) & 0.01 (0.87)\\
+
+ & Bid-ask Spread & 1.82 (0.54) & 3.5 (3) & 2.22 (1.05) & 1.19 (0.61) & 1.34 (0.59) & 1.35 (0.39) & 1.28 (0.55) & 0.99 (0.2) & 0.97 (0.27) & 0.97 (0.15) & 0.9 (0.09) & 0.9 (0.07) & 0.87 (0.1) & 1.02 (0.93) & 0.78 (0.09) & 1.36 (1.18)\\
+
+ & Trade ratio & 0.01 (0.01) & 0.01 (0.01) & 0.01 (0) & 0 (0) & 0.01 (0) & 0.01 (0) & 0.01 (0) & 0.01 (0) & 0.01 (0) & 0.01 (0) & 0.01 (0) & 0.01 (0) & 0.01 (0.01) & 0.01 (0.01) & 0.01 (0) & 0.01 (0)\\
+
+\multirow{-11}{*}{\raggedright\arraybackslash \rotatebox[origin=c]{90}{Government Bonds}} & Trading volume & 0.51 (0.99) & 0.78 (1.25) & 0.94 (1.34) & 2.01 (3.05) & 3.93 (5.09) & 2.61 (3.48) & 1.87 (2.27) & 1.66 (1.98) & 2.3 (2.04) & 1.65 (1.75) & 2.09 (2.43) & 2.31 (2.8) & 2.75 (3.33) & 4.14 (5.25) & 4.52 (5.03) & 2.21 (3.19)\\
+\cmidrule{1-18}
+ & ERV (changes) & -0.011 (0.204) & -0.003 (0.995) & -0.06 (0.746) & -0.006 (0.111) & -0.005 (0.141) & -0.005 (0.078) & -0.004 (0.045) & -0.003 (0.029) & -0.003 (0.056) & -0.007 (0.092) & -0.002 (0.02) & 0 (0.09) & -0.009 (0.09) & -0.014 (0.337) & 0.007 (0.361) & -0.009 (0.361)\\
+
+ & IV (changes) & -0.002 (0.626) & -0.013 (2.454) & -0.009 (0.923) & -0.002 (0.757) & 0.002 (0.923) & -0.002 (0.296) & -0.001 (0.162) & 0.002 (0.348) & -0.005 (0.688) & -0.004 (0.356) & -0.001 (0.151) & 0.006 (1.085) & -0.007 (0.329) & -0.01 (2.733) & -0.004 (1.021) & -0.003 (1.153)\\
+
+\multirow{-3}{*}{\raggedright\arraybackslash \rotatebox[origin=c]{90}{}} & VRP (changes) & 0.009 (0.66) & -0.01 (2.682) & 0.051 (1.19) & 0.004 (0.762) & 0.007 (0.935) & 0.003 (0.307) & 0.003 (0.166) & 0.004 (0.348) & -0.002 (0.69) & 0.004 (0.367) & 0.002 (0.151) & 0.007 (1.085) & 0.002 (0.336) & 0.004 (2.741) & -0.012 (1.062) & 0.006 (1.211)\\
+\bottomrule
+\end{tabular}}
+\caption{\label{tab:summary_statistics}Sample summary statistics. The values denote the sample means, values in brackets are the corresponding standard deviations. \emph{Transaction size} is the average transaction size during each 5-minute window for each ticker in 100 thousand USD. We compute transaction sizes as the number of shares multiplied by the share price. Market orders that affect multiple levels of the order book are reported as individual messages with identical timestamp by NASDAQ, but are aggregated before computing the transaction sizes. \emph{Depth} denotes the aggregate available number of shares within the best level, 5 or 50 basis points from the current best price (in million USD). \emph{Depth Imbalance} is the net of buy limit orders and sell limit orders in the order book, 50 basis points around the best price of each side (in million USD) \emph{Return} denotes the 5-minute log returns in basis points. \emph{Initiator net volume} corresponds to the average aggregate initiator net volume during each 5-minute interval in million USD. We compute the aggregate number of shares multiplied by one if the transaction corresponds to an execution above the current midquote and minus one if the transaction executes at a price lower than the current midquote. 
+\emph{bid-ask spread} is the time-weighted average bid-ask spread in basis points. \emph{Trade ratio} is the ratio of trade executions relative to the number of all messages. 
+\emph{Trading volume} is the executed transaction volume during each 5-minute window (in million USD). \emph{Amihud (ILLIQ) measure} is computed by dividing the absolute value of 5 minute log returns (in basis points) by trading volume (in million USD).
+To make the values comparable, we always multiply the aggregate number of traded shares with the rolling 12-month average midquote computed for each ticker. The tickers denote the major ETFs tracking S\&P~500 (\emph{SPY}) and government bonds (\emph{TLT}). \emph{ERV, IV, and VRP change} denotes the 5-minute change of the \emph{expected realized variance, IV, and the variance risk premium} (introduced in Section~\ref{sec:data}) in basis points.}
+\end{table}
+\end{landscape}
+
+\begin{table}
+\centering
+\resizebox{\linewidth}{!}{
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+  & \#Orders & Volume (mean) & Volume (median) & Volume (95\%) & Duration (mean) & Duration (25\%) & Duration (median) & Duration (75\%) & Duration (95\%)\\
+    \midrule
+    S\&P~500 & 75619 & 1.235 & 0.034 & 5.485 & 11.518 & 5 & 5 & 5 & 25\\
+    Government Bonds & 3708 & 0.647 & 0.012 & 2.409 & 48.863 & 5 & 5 & 30 & 275\\
+\bottomrule
+\end{tabular}}
+\caption{Summary statistics for the Abel Noser transaction message data. We restrict the sample to transactions with reported placement and last trade timestamps within regular NASDAQ trading hours. \emph{\# Orders} is the total number of transactions within the sample. \emph{Volume} is the total transaction size in million USD (computed as total traded shares multiplied with average transaction price per share). \emph{Duration} is in minutes and denotes the reported duration of the transaction from placement date until last trade date.} \label{tab:abel_noser_summary_table} 
+\end{table}
+
+\begin{figure}[!ht]
+    \centering
+    \includegraphics[width = 0.95\linewidth]{figures/regression_coefficients_erv.jpeg}
+    \caption{Panel 1 shows the estimated regression coefficient of the predictive regression $\log\left(RV_{t, \tau}^{(22)}\right)= c_\tau + \beta_\tau \log\left(RV_{t-22, 0}^{(21)} + \widetilde{RV}_{t, \tau}\right) + \gamma_\tau \log\left(RV_{t-5, 0}^{(4)} + \widetilde{RV}_{t, \tau}\right) + \delta_\tau \log\left(\widetilde{RV}_{t, \tau}\right) + \varepsilon_{t, \tau}$. The $x$-axis denotes the 5-minute intervals during the day, and the error bars correspond to 95\% confidence intervals. The red dotted line indicates the regression coefficients when assuming that $c, \beta$, $\gamma$ and $\delta$ are constant across timestamp $\tau$. 
+    The second panel illustrates the adjusted $R^2$ of two different predictive regression models for the future realized variance. \emph{Benchmark} corresponds to our main specification that predicts future realized variance. The \emph{restricted} model omits $ \widetilde{RV}_{t, \tau}$ in the regression and thus only incorporates information from past trading days. }
+    \label{fig:regression_coefficients}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width = 0.84\linewidth]{figures/irf_iv_decomposition_raw_periods.jpeg}
+    \caption{Estimated impulse response functions for the three different measures of risk, \emph{IV} are the standardized IV changes, \emph{ERV} is the standardized change in expected realized volatility and \emph{VRP} is the standardized change in the variance risk premium, measured as $\widehat{VRP}_{t, \tau}^{(22)} = \widehat{IV}_{t, \tau}^{(22)} - \widehat{E}_{t, \tau}\left(RV_{t, \tau}^{(22)}\right)$. 
+    We always impose a positive shock of size one standard deviation. 
+    \emph{Returns} and \emph{initiator net volume} responses denote \emph{cumulative} responses, whereas for \emph{trading volume}, \emph{depth} and \emph{bid-ask spread} we report impulse responses. We report \emph{Returns} \emph{bid-ask spread} and \emph{ILLIQ} responses in basis points, and denote the remaining variables in million USD. We only report instantaneous responses. The sample periods correspond to the Global Financial Crisis (\emph{GFC}) (September 1st, 2008 until September 1st, 2009), \emph{COVID-19} (February 15th, 2020 until February 15th, 2021) and the period in between (September 2nd, 2009 until February 14th, 2020).}
+     \label{fig:irf_iv_decomposition_raw_periods}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width = 0.88\linewidth]{figures/irf_abelnoser_iv_decomposition_raw.jpeg}
+    \caption{Estimated impulse response functions based on the entire sample period where Abel Noser data is available. We shock changes in $IV_{t, \tau}^{(22)}, ERV_{t, \tau}^{(22)}$ and $VRP_{t, \tau}^{(22)}$ by one standard deviation. \emph{Initiator net volume}, \emph{client net volume} and \emph{Return} responses denote cumulative values, \emph{trading volume, depth, bid-ask spread} and \emph{ILLIQ} are the standard impulse responses. We report \emph{Return} and \emph{bid-ask spread} responses in basis points and denote all remaining variables in million USD. \emph{Horizon} denotes the instantaneous (0 minutes), 20 minutes, 40 minutes and 60 minutes responses. The error bars illustrate 95\% confidence intervals.} \label{fig:abel_noser_initiator_net_volume_irf}
+ \end{figure}
+
+
+\section{Details on the computation of Abel Noser institutional order flow}
+
+Abel Noser data does \emph{not} provide information on the timing and volume of child orders as well as the types of orders executed by the broker. 
+We discard \emph{all} client transactions with recorded placement and execution times outside the regular (NASDAQ) trading hours.\footnote{This requirement eliminates roughly 60\% of all recorded client transactions. The remaining sample contains more than 220,000 executed client transactions. Institutional clients can choose to reveal timestamps associated with the execution of the meta order. If clients chose not to provide this information, Abel Noser defines placement to the opening auction and execution to the closing auction \citep[e.g.][]{Hu.2018}.} Further, we only keep transactions which are executed within one trading day in our sample. Such a conservative constraint allows us to keep estimation error of actual intraday client net volume small. 
+
+Because Abel Noser client transactions only reveal the meta orders submitted to the clients brokers but not the actually executed transactions and corresponding timestamps, we have to rely on a proxy for \emph{client net volume}$_{t, \tau, i}$ on a trading day $t$ during the last 5-minute interval up to the timestamp $\tau$ for ticker $i$. We compute the total trading volume of each client meta order $l$ as $V_l = \emph{shares}_l \cdot \emph{price}_l$ where $\emph{shares}_l$ is the number of shares of the meta order and $\emph{price}_l$ is the  average reported execution price per share. 
+Then, we define the duration of a client meta order with identifier $l$ from order placement time $s_l$ until order execution $e_l$ in minutes as $\Delta_l = e_l - s_l$. Table~\ref{tab:abel_noser_summary_table} in the Appendix provides summary statistics for the client transactions. We assume that the execution is in proportion to the duration $\Delta_l$ until execution such that net trading volume of transaction $l$ on execution date $t$ within each minute is simply
+\begin{equation}
+     \emph{net volume}_{l, \tau} = \frac{V_l \cdot \emph{side}_{l}}{\Delta_l} \text{ for } \tau \in[s_l, e_l] \text{ and } 0 \text{ otherwise}.
+\end{equation}
+ Finally, aggregated \emph{client net volume}$_{t, \tau, i}$ is the net of buy and sell client volumes for each client transaction active in ticker $i$ during the last 5-minute interval before timestamp $\tau$ such that if $N_{t, i}$ is the number of recorded client transactions for ticker $i$ on day $t$, we define 
+\begin{equation}
+     \emph{client net volume}_{t, \tau, i} := \sum\limits_{l = 1}^{N_{t,i}}  \emph{net volume}_{l, \tau}.
+ \end{equation}
+ We merge the NASDAQ order book and the Abel Noser dataset to illustrate the responses of institutional client net volume to an \emph{IV} shock as well as a shock in \emph{VRP} and \emph{ERV}. To that end, we re-estimate the coefficients of the impulse response function based on the entire available sample (January 2009 until April 2013) where we impose a shock of one positive standard deviation in changes of either $IV_{t, \tau}$ or $ERV_{t, \tau}$ or $VRP_{t, \tau}$.
+
+\end{document}

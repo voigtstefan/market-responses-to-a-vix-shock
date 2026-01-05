@@ -10,14 +10,16 @@ vix_decomposition <- read_parquet(
 ) |>
   select(ts, iv, erv, vrp)
 
-full_sample <- read_parquet("data/abel-noser/abel_noser_processed.parquet") |>
+full_sample <- read_parquet("data/abel-noser/abel_noser_processed.parquet")
+response_variables <- ncol(full_sample) - 1
+
+full_sample <- full_sample |>
   left_join(vix_decomposition, by = "ts") |>
   fill(iv, erv, vrp) |>
   drop_na()
 
 # Define setup for parallel computing -----
 shocked_variables <- c("iv", "erv", "vrp")
-response_variables <- ncol(full_sample) - 1
 
 eval_grid <- expand_grid(
   fixed_shock = c(FALSE),

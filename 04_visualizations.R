@@ -35,7 +35,7 @@ signature_plot <- function(p) {
 
 # Prepare main IRF data ----
 irf_data <- list.files(
-  "output/irf_estimation/",
+  "output/irf-estimation/",
   pattern = ".parquet",
   full.names = TRUE
 ) |>
@@ -66,6 +66,19 @@ irf_data <- list.files(
   select(ticker, Variable:last_col())
 
 # Comparison plots (IV decomposition) -----
+
+label_df <- irf_data |>
+  filter(
+    Period == "full",
+    standardize == FALSE
+  ) |>
+  group_by(ticker, response) |>
+  summarise(
+    y_mid = median(ir_estimate, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(y_label = y_labels[seq_along(response)])
+
 iv_decomposition <- irf_data |>
   filter(
     Period == "full",
@@ -75,23 +88,40 @@ iv_decomposition <- irf_data |>
     aes(x = Horizon, y = ir_estimate, fill = Variable)
   ) |>
   signature_plot() +
-  project_color_manual +
-  scale_fill_manual(
-    values = c(
-      "VRP" = project_purple,
-      "ERV" = project_aquamarine,
-      "IV" = project_yellow
-    )
-  )
+  geom_text(
+    data = label_df,
+    aes(x = -Inf, y = y_mid, label = y_label),
+    inherit.aes = FALSE,
+    angle = 90,
+    vjust = -4,
+    hjust = 0,
+    size = 5
+  ) +
+  coord_cartesian(clip = "off") +
+  theme(plot.margin = margin(5, 20, 5, 50))
 
 ggsave(
   iv_decomposition,
-  filename = "output/figures/irf_iv_decomposition_raw_full.jpeg",
+  filename = "output/figures/irf-iv-decomposition-raw-full.jpeg",
   width = 14,
   height = 8
 )
 
 # Comparison plots (IV decomposition) across different periods -----
+
+label_df <- irf_data |>
+  filter(
+    Period != "full",
+    Horizon == 0,
+    fixed_shock == FALSE,
+    standardize == FALSE
+  ) |>
+  group_by(ticker, response) |>
+  summarise(
+    y_mid = median(range(ir_estimate, na.rm = TRUE)),
+    .groups = "drop"
+  ) |>
+  mutate(y_label = y_labels[seq_along(response)])
 
 comparison_figures <- irf_data |>
   filter(
@@ -108,19 +138,21 @@ comparison_figures <- irf_data |>
     )
   ) |>
   signature_plot() +
-  project_color_manual +
-  scale_fill_manual(
-    values = c(
-      "VRP" = project_purple,
-      "ERV" = project_aquamarine,
-      "IV" = project_yellow
-    )
-  )
-
+  geom_text(
+    data = label_df,
+    aes(x = -Inf, y = y_mid, label = y_label),
+    inherit.aes = FALSE,
+    angle = 90,
+    vjust = -4,
+    hjust = 0,
+    size = 5
+  ) +
+  coord_cartesian(clip = "off") +
+  theme(plot.margin = margin(5, 20, 5, 50))
 
 ggsave(
   comparison_figures,
-  filename = "output/figures/irf_iv_decomposition_raw_periods.jpeg",
+  filename = "output/figures/irf-iv-decomposition-raw-periods.jpeg",
   width = 14,
   height = 8
 )
@@ -128,9 +160,9 @@ ggsave(
 # AbelNoser plots -----
 
 data_abel <- tibble(
-  file = dir("output/irf_estimation_abel_noser/", full.names = TRUE)
+  file = dir("output/irf-estimation-abel-noser/", full.names = TRUE)
 ) |>
-  mutate(data = map(file, readr::read_rds)) |>
+  mutate(data = map(file, read_parquet)) |>
   unnest(data) |>
   mutate(
     Variable = shocked_variable,
@@ -157,6 +189,15 @@ data_abel <- tibble(
     Variable = ordered(Variable, levels = c("VRP", "ERV", "IV"))
   )
 
+
+label_df <- data_abel |>
+  group_by(ticker, response) |>
+  summarise(
+    y_mid = median(ir_estimate, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(y_label = y_abel_labels[seq_along(response)])
+
 p_tmp <- data_abel |>
   mutate(Horizon = as_factor(lead)) |>
   ggplot(aes(
@@ -166,18 +207,22 @@ p_tmp <- data_abel |>
     order = Variable
   )) |>
   signature_plot() +
-  project_color_manual +
-  scale_fill_manual(
-    values = c(
-      "VRP" = project_purple,
-      "ERV" = project_aquamarine,
-      "IV" = project_yellow
-    )
-  )
+  geom_text(
+    data = label_df,
+    aes(x = -Inf, y = y_mid, label = y_label),
+    inherit.aes = FALSE,
+    angle = 90,
+    vjust = -4,
+    hjust = 0,
+    size = 5
+  ) +
+  coord_cartesian(clip = "off") +
+  theme(plot.margin = margin(5, 20, 5, 50))
+
 
 ggsave(
   p_tmp,
-  filename = "output/figures/irf_abelnoser_iv_decomposition_raw.jpeg",
+  filename = "output/figures/irf-abelnoser-iv-decomposition-raw.jpeg",
   width = 14,
   height = 8
 )

@@ -1,5 +1,6 @@
 library(dplyr)
 library(arrow)
+library(tidyr)
 library(lubridate)
 library(hms)
 source("_project-variables.R")
@@ -64,6 +65,7 @@ summary_table <- raw_data |>
 summary_table |>
   rename(` ` = ticker) |>
   kableExtra::kable(
+    format = "latex",
     booktabs = TRUE,
     digits = 3,
     escape = FALSE

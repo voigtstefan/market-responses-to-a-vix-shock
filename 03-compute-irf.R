@@ -22,6 +22,8 @@ full_sample <- read_parquet("output/orderbook_sample.parquet") |>
     names_sep = "."
   )
 
+response_variables <- ncol(full_sample) - 1
+
 vix_decomposition <- read_parquet(
   "data/pitrading/variance_risk_premium.parquet"
 ) |>
@@ -36,8 +38,6 @@ full_sample <- full_sample |>
 shocked_variables <- c("iv", "erv", "vrp")
 periods <- c("full", "GFC", "Between", "COVID-19")
 
-response_variables <- ncol(full_sample) - 1
-
 eval_grid <- expand_grid(
   fixed_shock = c(FALSE),
   standardize = c(FALSE),
@@ -47,8 +47,7 @@ eval_grid <- expand_grid(
 ) |>
   filter(!(standardize == TRUE & period != "full"))
 
-
-plan(multisession, workers = 6)
+plan(multisession, workers = 7)
 future_map(
   1:nrow(eval_grid),
   ~ evaluate_task(

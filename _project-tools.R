@@ -161,8 +161,6 @@ compute_irf <- function(
 
     tmp_Sigma_beta[[h + 1]] <- se_vals
     tmp_Sigma_c[[h + 1]] <- tmp_Sigma_c[[h]] + se_vals
-
-    cat(h, " ")
   }
 
   irf <- tibble(lead = 5 * (0:leads)) |>
@@ -228,6 +226,7 @@ evaluate_task <- function(
   standardize <- eval_grid$standardize[task_id]
   period <- eval_grid$period[task_id]
   shocked_variable <- eval_grid$shocked_variable[task_id]
+  i <- eval_grid$i[task_id]
 
   start_date <- dplyr::case_when(
     period == "full" ~ "2000-09-01",
@@ -271,8 +270,6 @@ evaluate_task <- function(
     shocked_variable,
     p = lags
   )
-
-  i <- which(colnames(sample[, -1]) == shocked_variable)
 
   irf <- compute_irf(sample, asymptotic_d, i = i, leads = 12, p = lags) |>
     dplyr::mutate(

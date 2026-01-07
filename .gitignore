@@ -1,5 +1,4 @@
 data/*
-output/*
+output/irf-estimation*
 renv/
 .Renviron
-*.rds

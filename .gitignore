@@ -1,6 +1,5 @@
 data/*
 output/*
 renv/
-non-core-analysis/
 .Renviron
-presentations/Discussion_Panayides_FutFinInfo_Sweden_2022.pptx
+*.rds

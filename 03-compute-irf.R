@@ -44,8 +44,7 @@ eval_grid <- expand_grid(
   period = periods,
   shocked_variable = shocked_variables,
   i = 1:response_variables
-) |>
-  filter(!(standardize == TRUE & period != "full"))
+)
 
 plan(multisession, workers = 7)
 future_map(
